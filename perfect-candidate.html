@@ -793,7 +793,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
 
   /* ---------- early start: answer while the question is still being asked ---------- */
-  let spec=null,specT=null,specOff=0,draftCard=null,lastSpecAt=0,lastTurn=null,lastFinalAt=0,utterStart=0;
+  let spec=null,specT=null,specOff=0,draftCard=null,lastSpecAt=0,lastTurn=null,lastFinalAt=0,utterStart=0,specDirty=false;
   /* a question spoken in pieces: a piece that starts within 5s of the last one is merged into the same question and the same answer card */
   const MERGE_MS=5000;
   const NEWQ=/^(next question|next one|moving on|move on|another question|let s move|lets move|okay now|ok now|now let s|now lets|my next question|second question|one more)/;
@@ -814,7 +814,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const x=words(a),y=words(b);if(!x.length||!y.length)return false;
     const sy=new Set(y);return x.filter(w=>sy.has(w)).length/Math.max(x.length,y.length)>=0.85;
   }
-  function stopSpec(){clearTimeout(specT);if(spec){try{spec.ctrl.abort()}catch(e){}spec=null}}
+  function stopSpec(){clearTimeout(specT);specT=null;if(spec){try{spec.ctrl.abort()}catch(e){}spec=null}}
   function startSpec(q,sm){
     stopSpec();
     const ctrl=new AbortController();
@@ -828,9 +828,24 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     run(interviewPrompt(q,false),txt=>{s.text=txt;if(s.onText)s.onText(txt);else if(draftCard===card)card.querySelector('.out').innerHTML=md(txt)},null,'quick',ctrl.signal)
       .then(r=>{s.text=r.text||s.text})
       .catch(e=>{s.err=e;if(e&&e.code==='rate_limited')specOff=Date.now()+30000})
-      .then(()=>{s.done=true;if(s.onDone)s.onDone()});
+      .then(()=>{s.done=true;if(s.onDone)s.onDone();if(specDirty&&spec===s){specDirty=false;maybeSpec()}});
   }
   function maybeSpec(){
+    /* throttled, not debounced: keeps drafting while the question is still being spoken; one draft at a time, never aborted mid-stream */
+    if(specT||!target.auto||!$('autoSend').checked||!$('earlyOn').checked||paused||Date.now()<specOff)return;
+    specT=setTimeout(()=>{
+      specT=null;
+      if(paused||busyI)return;
+      const q=target.value.trim();
+      if(words(q).length<3)return;
+      const c=classify(q);if(c==='cand'||echoes(q))return;
+      const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
+      if(spec&&sameQ(spec.q,fq))return;
+      if(spec&&!spec.done){specDirty=true;return}
+      specDirty=false;startSpec(fq,sm);
+    },Math.max(250,1800-(Date.now()-lastSpecAt)));
+  }
+  function maybeSpecOld(){
     clearTimeout(specT);
     if(!target.auto||!$('autoSend').checked||!$('earlyOn').checked||paused||busyI||Date.now()<specOff)return;
     specT=setTimeout(()=>{
