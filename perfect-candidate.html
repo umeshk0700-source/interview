@@ -229,6 +229,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
           <button class="btn small" id="pauseBtn" aria-pressed="false">I'm answering: pause</button>
           <label class="btn small" for="iFile">Attach picture</label><input type="file" id="iFile" accept="image/*" multiple hidden>
           <label class="chk"><input type="checkbox" id="autoSend" checked> Answer the moment I finish a question</label>
+          <label class="chk"><input type="checkbox" id="keepOn"> Keep listening for the next question</label>
         </div>
         <div class="thumbs" id="iThumbs"></div>
       </div>
@@ -449,18 +450,24 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     try{dict=await claude.use('dictation')}catch(e){dict=null}
     if(!dict){micBtn.disabled=true;micBtn.style.opacity=.4;micStatus.textContent='Voice input is not available in this browser. Type the question instead.';return}
     $('eMic').hidden=false;$('mMic').hidden=false;
-    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
+    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
     dict.onFinal(({text})=>{if(paused)return;target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
-      if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(()=>{if(target.value.trim())askInterview()},700)}});
+      if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,1200)}});
     dict.onState(({state,reason})=>{
       if(state==='listening'){setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
       else{
-        const was=listening;setMic(false,'Tap the mic and ask the question');if(target.btn)target.btn.textContent='Dictate';
+        const was=listening;clearTimeout(sendT);setMic(false,'Tap the mic and ask the question');if(target.btn)target.btn.textContent='Dictate';
         if(was&&target.auto&&$('autoSend').checked&&target.value.trim())askInterview();
       }
     });
   })();
   const target={value:'',base:'',finals:'',auto:true,btn:null};
+  /* silence detected after speech: send the question, and stop the mic unless asked to keep listening */
+  function endOfSpeech(){
+    if(!listening||!target.auto||!$('autoSend').checked||!target.value.trim())return;
+    if($('keepOn').checked)askInterview();
+    else if(dict)dict.stop().catch(()=>{});
+  }
   function bindTarget(el,auto,btn){
     target.el=el;target.auto=auto;target.btn=btn;target.base=el.value.trim();target.finals='';
     Object.defineProperty(target,'value',{configurable:true,get(){return el.value},set(v){el.value=v}});
@@ -469,7 +476,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(!dict)return;
     if(listening){try{await dict.stop()}catch(e){}return}
     bindTarget(el,auto,btn);
-    try{await dict.start()}catch(e){
+    try{await dict.start();clearTimeout(sendT);if(auto)sendT=setTimeout(()=>{if(listening&&!el.value.trim()&&dict)dict.stop().catch(()=>{})},10000)}catch(e){
       setMic(false,e&&e.code==='not_granted'?'Microphone access was declined. Type the question instead.':'Could not start listening. Try again.');
     }
   }
