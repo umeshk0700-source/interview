@@ -164,6 +164,13 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     <div class="feats"><span>Voice in, text out</span><span>Picture questions</span><span>Ignores your own speech</span><span>Consistent story across answers</span><span>Likely questions from the JD</span><span>Light and dark</span></div>
   </section>
 
+  <section id="progress" class="panel" hidden data-has="0" style="padding:16px;display:grid;gap:12px">
+    <h3 style="font-size:16px">Your progress</h3>
+    <div id="progList"></div>
+    <div id="progFocusWrap"><div class="note" style="margin-bottom:6px">Next run will focus on</div><div class="feats" id="progFocus"></div></div>
+    <div class="note" id="progIssues"></div>
+  </section>
+
   <section id="mock" class="view" hidden>
     <div class="viewhead"><h2>Mock interview</h2></div>
     <div id="mSetup" class="panel" style="padding:16px;display:grid;gap:12px">
@@ -201,7 +208,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   </section>
 
   <section id="interview" class="view" hidden>
-    <div class="viewhead"><h2>Interview</h2><button class="btn small" id="sizeBtn" style="margin-left:auto">Larger text</button></div>
+    <div class="viewhead"><h2>Interview</h2><span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" id="endBtn">End session and debrief</button><button class="btn small" id="sizeBtn">Larger text</button></span></div>
     <div class="controls">
       <label class="f">Round
         <select id="iRound">
@@ -302,7 +309,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   const views=['home','interview','exam','mock','prep'];
   function show(){
     let h=(location.hash||'').replace('#','');if(!views.includes(h))h='home';
-    views.forEach(v=>$(v).hidden=v!==h);$('homeBtn').hidden=h==='home';$('how').hidden=h!=='home';
+    views.forEach(v=>$(v).hidden=v!==h);$('homeBtn').hidden=h==='home';$('how').hidden=h!=='home';$('progress').hidden=h!=='home'||$('progress').dataset.has!=='1';
   }
   addEventListener('hashchange',show);show();
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.go});
@@ -387,6 +394,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   const picI=picker('iFile','iThumbs',$('iq')),picE=picker('eFile','eThumbs',$('eq'));
   const picNote='\n\nThe question, or part of it, is in the attached picture(s). Read them carefully, including any code, diagrams, tables and handwriting, and answer what is shown. If something is unreadable, say what you could not read.';
   function errText(e){
+    logIssue('error',{message:String((e&&e.message)||e).slice(0,300),code:(e&&e.code)||''});
     if(e&&e.code==='not_granted')return 'Permission to ask Claude was declined. Reload and allow it to continue.';
     if(e&&e.code==='rate_limited')return 'Too many requests. Wait a moment and try again.';
     return (e&&e.message)||'Something went wrong. Try again.';
@@ -433,7 +441,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       const r=await run(interviewPrompt(q,live)+(imgs.length?picNote:''),txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)},imgs,'quick');
       picI.clear();
       last=r.text||last;liveAns='';
-      if(live&&/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{t.remove();iq.value=q;askInterview(true)};out.append(ab)}
+      if(live&&/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
       else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
@@ -565,7 +573,16 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       };
       bar.append(b);
     });
-    out.parentNode.append(bar);
+    const fl=el('button','btn small','Report a problem');fl.type='button';
+    const why=el('div','chips');why.hidden=true;why.style.padding='8px 0 0';
+    ['Wrong or weak answer','Too long','Too short','Sounds fake','Missed my question','Other'].forEach(rs=>{
+      const c=el('button','chip',rs);c.type='button';
+      c.onclick=()=>{logIssue('answer-quality',{reason:rs,question:q.slice(0,300),answer:get().slice(0,700)});why.textContent='Saved for the next fix round.'};
+      why.append(c);
+    });
+    fl.onclick=()=>{why.hidden=!why.hidden};
+    bar.append(fl);
+    out.parentNode.append(bar,why);
   }
 
   $('company').value=store.get('pc-co','');
@@ -590,7 +607,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(!jd.value.trim()){$('mErr').textContent='Add the job description in the Role panel first.';$('role').open=true;return}
     $('mErr').textContent='';$('mStart').disabled=true;$('mStart').textContent='Preparing questions…';
     const n=+$('mCount').value;
-    const prompt='You are a senior interviewer for the role below. Write '+n+' interview questions for a '+$('mRound').value+' round at '+$('mLevel').value+' difficulty, ordered the way a real interview flows, each tailored to the JD. Return only a JSON array of '+n+' strings. No commentary.'+NL+NL+roleBlock();
+    const prompt='You are a senior interviewer for the role below. Write '+n+' interview questions for a '+$('mRound').value+' round at '+$('mLevel').value+' difficulty, ordered the way a real interview flows, each tailored to the JD. Return only a JSON array of '+n+' strings. No commentary.'+NL+NL+roleBlock()+focusText();
     try{
       const r=await run(prompt,()=>{});const s=r.text||'';
       const arr=JSON.parse(s.slice(s.indexOf('['),s.lastIndexOf(']')+1));
@@ -632,8 +649,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     mock.res.forEach((r,i)=>{const d=el('div','mrow');d.append(el('b',null,'Q'+(i+1)+'  '+(r.score==null?'-':r.score)+'/10'),el('span',null,r.q));rows.append(d)});
     const out=$('mSummary');out.textContent='Writing your summary…';
     const results=mock.res.map((r,i)=>'Q'+(i+1)+': '+r.q+NL+'Answer: '+(r.a||'(skipped)').slice(0,500)+NL+'Score: '+(r.score==null?'n/a':r.score)).join(NL+NL);
-    const prompt='You are an interview coach. From the mock interview results below, write: the 3 biggest patterns to fix, the strongest skill to lead with, and a 3-step plan for the next practice session. Short bullets, specific to this candidate and role.'+NL+NL+roleBlock()+NL+NL+results;
-    try{const r=await run(prompt,txt=>{out.innerHTML=md(txt)},null,'default');out.innerHTML=md(r.text||'')}
+    const prompt='You are an interview coach. From the mock interview results below, write: the 3 biggest patterns to fix, the strongest skill to lead with, and a 3-step plan for the next practice session. Short bullets, specific to this candidate and role. Finish with a last line starting WEAK: followed by 3 to 5 short topic names separated by semicolons.'+NL+NL+roleBlock()+NL+NL+results;
+    try{const r=await run(prompt,txt=>{out.innerHTML=md(stripWeak(txt))},null,'default');const full=r.text||'';out.innerHTML=md(stripWeak(full));saveSession({type:'mock',avg:+avg.toFixed(1),results:mock.res.map(x=>({q:x.q.slice(0,200),score:x.score})),weak:parseWeak(full),summary:stripWeak(full).slice(0,1500)})}
     catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
   }
 
@@ -662,6 +679,62 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   $('prepRegen').onclick=()=>{if(prepCur)runPrep(prepCur,true)};
   $('prepCopy').onclick=async()=>{const b=$('prepCopy');try{await navigator.clipboard.writeText(prepCache[prepCur[0]]||'');b.textContent='Copied'}catch(e){b.textContent='Select text to copy'}setTimeout(()=>b.textContent='Copy',1600)};
+
+  /* ---------- feedback loop: issues, sessions, focus areas ---------- */
+  let db=null,focus=[],openIssues=0;
+  const seenIssues=new Set();
+  const roleTitle=()=>(jd.value.trim().split(NL)[0]||'').slice(0,80);
+  function localList(k){try{return JSON.parse(store.get('pc-'+k,'[]'))}catch(e){return []}}
+  async function addRecord(col,obj){
+    obj.ts=Date.now();obj.role=roleTitle();
+    try{if(db){await db.collection(col).add(obj);return}}catch(e){}
+    const a=localList(col);a.push(obj);store.set('pc-'+col,JSON.stringify(a.slice(-60)));
+    if(col==='sessions')renderProgress(a.slice().reverse().slice(0,10));
+  }
+  function logIssue(kind,detail){
+    const key=kind+'|'+(detail.message||detail.reason||detail.question||'');
+    if(seenIssues.has(key)||seenIssues.size>25)return;seenIssues.add(key);
+    addRecord('issues',Object.assign({kind,view:(location.hash||'#home').slice(1),status:'open'},detail));
+  }
+  addEventListener('error',e=>logIssue('js-error',{message:String(e.message||'error').slice(0,300)}));
+  function parseWeak(t){const m=t.match(/WEAK: *(.*)/i);return m?m[1].split(';').map(s=>s.trim()).filter(Boolean).slice(0,6):[]}
+  function stripWeak(t){return t.replace(/WEAK: *.*/i,'').trim()}
+  function saveSession(s){addRecord('sessions',s)}
+  function focusText(){return focus.length?NL+NL+'PREVIOUS WEAK AREAS (include at least two questions that probe these): '+focus.join('; '):''}
+  function renderProgress(list){
+    const box=$('progress');list=list||[];
+    if(!list.length){box.dataset.has='0';box.hidden=true;return}
+    focus=[];list.slice(0,5).forEach(s=>(s.weak||[]).forEach(w=>{if(!focus.includes(w))focus.push(w)}));focus=focus.slice(0,10);
+    box.dataset.has='1';const h=(location.hash||'').replace('#','');box.hidden=!(h===''||h==='home');
+    const ul=$('progList');ul.innerHTML='';
+    list.slice(0,6).forEach(s=>{const d=el('div','mrow');d.append(el('b',null,s.type==='mock'?(s.avg!=null?s.avg+' / 10':'Mock'):'Interview'),el('span',null,new Date(s.ts).toLocaleDateString()+' · '+(s.role||'Session')+(s.type==='mock'?' · mock':' · live')));ul.append(d)});
+    const f=$('progFocus');f.innerHTML='';focus.forEach(w=>f.append(el('span',null,w)));
+    $('progFocusWrap').hidden=!focus.length;
+  }
+  async function initFeedback(){
+    try{db=await claude.use('db')}catch(e){db=null}
+    const local=()=>renderProgress(localList('sessions').reverse().slice(0,10));
+    if(!db){local();$('progIssues').textContent=localList('issues').length?localList('issues').length+' issues logged on this device':'';return}
+    try{
+      db.collection('sessions').orderBy('ts','desc').limit(10).onSnapshot(s=>renderProgress(s.docs.map(d=>d.data())),local);
+      db.collection('issues').where('status','==','open').limit(100).onSnapshot(s=>{openIssues=s.size;$('progIssues').textContent=s.size?s.size+' open issue'+(s.size>1?'s':'')+' logged for the next fix round':''},()=>{});
+    }catch(e){local()}
+  }
+  initFeedback();
+  $('endBtn').onclick=async()=>{
+    $('iEmpty').hidden=true;
+    const t=addTurn(iThread,'','Session debrief');const out=t.querySelector('.out');
+    if(!history.length){out.textContent='Nothing to review yet. Ask a few questions first.';return}
+    out.textContent='Reviewing the session…';
+    const log=history.map((h,i)=>'Q'+(i+1)+': '+h.q+NL+'Answer: '+h.a.slice(0,500)).join(NL+NL);
+    const prompt='You are an interview coach reviewing a practice interview session for the role below. The questions asked and the answers given are listed. Write: the topics the interviewer probed, which topics the candidate should study more and why with one concrete study tip each, and anything in the answers to tighten next run. Short bullets. Finish with a last line starting WEAK: followed by 3 to 5 short topic names separated by semicolons.'+NL+NL+roleBlock()+NL+NL+log;
+    try{
+      const r=await run(prompt,txt=>{out.innerHTML=md(stripWeak(txt))},null,'default');const full=r.text||'';
+      out.innerHTML=md(stripWeak(full));
+      saveSession({type:'interview',questions:history.map(h=>h.q.slice(0,200)),weak:parseWeak(full),summary:stripWeak(full).slice(0,1500)});
+      history.length=0;wireCopy(t,()=>stripWeak(full));
+    }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
+  };
 
   /* ---------- reading size ---------- */
   let big=store.get('pc-big','0')==='1';
