@@ -247,6 +247,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
           <label class="btn small" for="iFile">Attach picture</label><input type="file" id="iFile" accept="image/*" multiple hidden>
           <label class="chk"><input type="checkbox" id="autoSend" checked> Answer the moment I finish a question</label>
           <label class="chk"><input type="checkbox" id="keepOn" checked> Continuous mic (keep listening)</label>
+          <label class="chk"><input type="checkbox" id="earlyOn" checked> Start answering while I ask</label>
         </div>
         <div class="thumbs" id="iThumbs"></div>
         <div class="note">Continuous mode keeps listening until you tap the mic. Hold Space while you speak and everything you say is ignored.</div>
@@ -353,9 +354,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   (async()=>{try{sample=await claude.use('sample')}catch(e){sample=null}if(!sample)$('foot').textContent='Asking Claude is not available in this view, so answers cannot be generated here. Open the page in Claude.'})();
   const roleBlockBase=()=>'JOB DESCRIPTION:\n'+(jd.value.trim()||'(none provided: assume a strong generalist professional)')+'\n\nCANDIDATE BACKGROUND:\n'+(bg.value.trim()||'(none provided)');
 
-  async function run(prompt,onText,images,tier){
+  async function run(prompt,onText,images,tier,signal){
     if(!sample)throw {message:'Asking Claude is not available here.'};
-    const opts={onText:({text})=>onText(text),cache:false,modelTier:tier||'default'};
+    const opts={onText:({text})=>onText(text),cache:false,modelTier:tier||'default'};if(signal)opts.signal=signal;
     if(images&&images.length){
       let lim=null;try{lim=await sample.limits()}catch(e){}
       if(!lim||!lim.images)throw {message:'Pictures are not supported in this view. Type the question instead.'};
@@ -443,14 +444,14 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const imgs=picI.blobs();const typed=iq.value.trim();
     if(!typed&&!imgs.length)return;
     const cls=manual===true?'q':classify(typed);
-    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
+    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){stopSpec();iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
     if(busyI)return;
     const q=typed||'(The question is in the attached picture.)';
     busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);
     const t=addTurn(iThread,q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''),'Candidate');const out=t.querySelector('.out');let last='';
     try{
       const live=manual!==true&&cls!=='q';
-      const r=await run(interviewPrompt(q,live)+(imgs.length?picNote:''),txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)},imgs,'quick');
+      const r=await runI(q,live,imgs,txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
       picI.clear();
       last=r.text||last;liveAns='';
       if(live&&/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
@@ -470,7 +471,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     try{dict=await claude.use('dictation')}catch(e){dict=null}
     if(!dict){micBtn.disabled=true;micBtn.style.opacity=.4;micStatus.textContent='Voice input is not available in this browser. Type the question instead.';return}
     $('eMic').hidden=false;$('mMic').hidden=false;
-    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
+    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);maybeSpec();target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
     dict.onFinal(({text})=>{if(paused)return;target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
       if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,classify(target.value)==='q'?450:1200)}});
     dict.onState(({state,reason})=>{
@@ -505,7 +506,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   micBtn.onclick=()=>toggleDict(iq,true,null);
   $('pauseBtn').onclick=()=>{
-    paused=!paused;clearTimeout(sendT);
+    paused=!paused;clearTimeout(sendT);stopSpec();
     if(paused){iq.value='';target.base='';target.finals=''}
     $('pauseBtn').textContent=paused?'Resume listening':"I'm answering: pause";
     $('pauseBtn').setAttribute('aria-pressed',String(paused));
@@ -766,6 +767,47 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   function humanize(t){
     return String(t).split(String.fromCharCode(8212)).join(', ').split(String.fromCharCode(8211)).join(' to ').replace(/ +,/g,',').replace(/, +/g,', ').replace(/^(certainly|absolutely|sure|of course|great question)[!,. ]+/i,'');
+  }
+
+  /* ---------- early start: answer while the question is still being asked ---------- */
+  let spec=null,specT=null,specOff=0;
+  function sameQ(a,b){
+    const x=words(a),y=words(b);if(!x.length||!y.length)return false;
+    const sy=new Set(y);return x.filter(w=>sy.has(w)).length/Math.max(x.length,y.length)>=0.85;
+  }
+  function stopSpec(){clearTimeout(specT);if(spec){try{spec.ctrl.abort()}catch(e){}spec=null}}
+  function startSpec(q){
+    stopSpec();
+    const ctrl=new AbortController();
+    const s={q,ctrl,text:'',done:false,err:null,onText:null,onDone:null};
+    spec=s;
+    run(interviewPrompt(q,false),txt=>{s.text=txt;if(s.onText)s.onText(txt)},null,'quick',ctrl.signal)
+      .then(r=>{s.text=r.text||s.text})
+      .catch(e=>{s.err=e;if(e&&e.code==='rate_limited')specOff=Date.now()+30000})
+      .then(()=>{s.done=true;if(s.onDone)s.onDone()});
+  }
+  function maybeSpec(){
+    clearTimeout(specT);
+    if(!target.auto||!$('autoSend').checked||!$('earlyOn').checked||paused||busyI||Date.now()<specOff)return;
+    specT=setTimeout(()=>{
+      const q=target.value.trim();
+      if(words(q).length<4||classify(q)!=='q'||echoes(q))return;
+      if(spec&&sameQ(spec.q,q))return;
+      startSpec(q);
+    },700);
+  }
+  function adopt(s,cb){
+    spec=null;
+    return new Promise((res,rej)=>{
+      cb(s.text);s.onText=cb;
+      const fin=()=>{if(s.err)rej(s.err);else res({text:s.text})};
+      if(s.done)fin();else s.onDone=fin;
+    });
+  }
+  function runI(q,live,imgs,cb){
+    if(!imgs.length&&spec&&sameQ(spec.q,q))return adopt(spec,cb);
+    stopSpec();
+    return run(interviewPrompt(q,live)+(imgs.length?picNote:''),cb,imgs,'quick');
   }
 
   /* ---------- who is speaking: interviewer or candidate ---------- */
