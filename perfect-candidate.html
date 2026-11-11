@@ -111,6 +111,18 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
 .mrow{display:grid;grid-template-columns:80px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
 .prepgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
 .prepgrid .btn{text-align:left}
+#bankCats{display:grid;gap:10px}
+.cat summary{cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 16px;list-style:none}
+.cat summary::-webkit-details-marker{display:none}
+.cat .body{padding:0 16px 12px}
+.qa{padding:12px 0;border-top:1px solid var(--line);display:grid;gap:8px}
+.qatop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.qatop b{font:600 15px/1.4 var(--f-display);min-width:0}
+.qaans{font-size:14px;min-width:0}
+.qaans p{margin:0 0 8px}.qaans ul,.qaans ol{margin:0 0 8px;padding-left:22px}
+.qaans pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;font:13px/1.5 var(--f-mono);margin:0 0 10px}
+.qaans code{font-family:var(--f-mono);font-size:.92em;background:var(--bg);padding:1px 5px;border-radius:4px}
+.qaans pre code{background:none;padding:0}
 [hidden]{display:none!important}
 </style>
 
@@ -151,7 +163,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       <button class="door" data-go="interview"><span class="tag">VOICE IN, TEXT OUT</span><h2>Interview</h2><p>Speak the interviewer's question. The candidate answers in writing, in first person, ready to say aloud.</p></button>
       <button class="door" data-go="exam"><span class="tag">TEXT OR PICTURE</span><h2>Exam help</h2><p>MCQs, coding, aptitude, case and short-answer questions, typed or photographed, with the answer first and the reasoning after.</p></button>
       <button class="door" data-go="mock"><span class="tag">SCORED PRACTICE</span><h2>Mock interview</h2><p>It interviews you with questions built from the JD, scores every answer, and shows a stronger version.</p></button>
-      <button class="door" data-go="prep"><span class="tag">WRITTEN MATERIALS</span><h2>Prep kit</h2><p>Pitch, cover letter, resume bullets, questions to ask, a 30-60-90 plan and a negotiation script.</p></button>
+      <button class="door" data-go="prep"><span class="tag">WRITTEN MATERIALS</span><h2>Prep kit</h2><p>A full question bank with answers for everything that can come up in the interview, plus pitch, cover letter, resume bullets and a negotiation script.</p></button>
     </div>
   </section>
 
@@ -202,7 +214,14 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
 
   <section id="prep" class="view" hidden>
     <div class="viewhead"><h2>Prep kit</h2></div>
-    <p style="margin:0;color:var(--muted)">Written material generated from your role, background and profile. Add the company name in the Role panel for sharper results.</p>
+    <div class="panel" style="padding:16px;display:grid;gap:12px">
+      <div><h3 style="font-size:18px">Question bank</h3><p class="note" style="margin:4px 0 0">Every question that can realistically come up for this role, with answers you can say aloud. Generate one category or everything. It is saved on this device for this job description.</p></div>
+      <div class="row"><button class="btn primary" id="bankAll">Generate everything</button><button class="btn" id="bankClear">Clear bank</button><span class="note" id="bankStatus"></span></div>
+      <div class="row"><input type="text" id="bankSearch" placeholder="Search questions and answers" style="flex:1 1 220px;width:auto"><label class="chk"><input type="checkbox" id="bankQuiz"> Quiz mode (hide answers)</label><label class="chk"><input type="checkbox" id="bankUnknown"> Hide ones I marked known</label></div>
+      <div id="bankCats"></div>
+    </div>
+    <h3 style="font-size:18px">Written materials</h3>
+    <p style="margin:0;color:var(--muted)">Generated from your role, background and profile. Add the company name in the Role panel for sharper results.</p>
     <div class="prepgrid" id="prepGrid"></div>
     <div class="a" id="prepOutWrap" hidden><div class="meta"><span id="prepTitle"></span><span class="row"><button class="btn small" id="prepRegen">Redo</button><button class="btn small" id="prepCopy" hidden>Copy</button></span></div><div class="out" id="prepBody"></div></div>
   </section>
@@ -851,6 +870,102 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(e.code!=='Space'||!pausedByHold)return;
     holdT=setTimeout(()=>{paused=false;pausedByHold=false;micStatus.textContent=listening?'Listening… speak the question':'Tap the mic and ask the question'},1200);
   });
+
+  /* ---------- question bank ---------- */
+  const CATS=[
+    ['core','Core concepts','the fundamental concepts, definitions and differences between related ideas that this role depends on'],
+    ['deep','Technical deep-dive','advanced questions on internals, trade-offs, performance, debugging and best practices'],
+    ['stack','Tools and tech stack','every tool, language, framework and platform named in the job description: what it is, why it is used, how the candidate used it, and the alternatives'],
+    ['scenario','Scenarios and case','real-world scenario, troubleshooting and design questions an interviewer may pose, each with a clear approach'],
+    ['hands','Coding and hands-on','practical problems, queries, snippets and exercises, with working code in the answer'],
+    ['hr','Behavioural and HR','strengths, weaknesses, conflict, failure, leadership, why this role and company, career goals, notice period and salary expectation'],
+    ['domain','Role and domain','responsibilities of the role, the industry domain, processes, methodologies, quality and teamwork practices'],
+    ['resume','Resume and projects','drill-down questions asked from the candidate background and projects, including what went wrong and what they would change'],
+    ['curve','Curveballs and wrap-up','tough, unusual or trap questions, gaps in the profile, and the questions the candidate should ask at the end']
+  ];
+  let bank={},known=new Set(),openCats=new Set(),bankBusy=false,bankStop=false,clr=null;
+  try{known=new Set(JSON.parse(store.get('pc-known','[]')))}catch(e){}
+  const bankFp=()=>jd.value.trim().length+'|'+jd.value.trim().slice(0,80);
+  function saveBank(){store.set('pc-bank',JSON.stringify({fp:bankFp(),bank}))}
+  function loadBank(){
+    bank={};
+    try{const s=JSON.parse(store.get('pc-bank','null'));if(s&&s.fp===bankFp())bank=s.bank||{}}catch(e){}
+    renderBank();
+  }
+  function parseQA(txt,final){
+    const blocks=txt.split('###');if(!final)blocks.pop();
+    return blocks.map(b=>{const j=b.indexOf('Q:'),i=b.indexOf('A:',j+2);if(j<0||i<0)return null;return {q:b.slice(j+2,i).trim(),a:b.slice(i+2).trim()}}).filter(x=>x&&x.q&&x.a);
+  }
+  function bankTotal(){let n=0;CATS.forEach(c=>n+=(bank[c[0]]||[]).length);return n}
+  function fillCat(key){
+    const det=$('cat-'+key);if(!det)return;
+    const items=bank[key]||[];
+    det.querySelector('.cnt').textContent=items.length?items.length+' questions':'not generated';
+    det.querySelector('.gen').textContent=items.length?'Regenerate':'Generate';
+    const body=det.querySelector('.body');body.innerHTML='';
+    const term=$('bankSearch').value.trim().toLowerCase(),quiz=$('bankQuiz').checked,unk=$('bankUnknown').checked;
+    items.forEach(it=>{
+      const k=key+'|'+it.q.slice(0,80);
+      if(unk&&known.has(k))return;
+      if(term&&(it.q+' '+it.a).toLowerCase().indexOf(term)<0)return;
+      const d=el('div','qa'),top=el('div','qatop');top.append(el('b',null,it.q));
+      const kb=el('button','btn small',known.has(k)?'Known':'Mark known');kb.type='button';
+      kb.onclick=()=>{if(known.has(k))known.delete(k);else known.add(k);store.set('pc-known',JSON.stringify(Array.from(known)));fillCat(key)};
+      top.append(kb);
+      const ans=el('div','qaans');ans.innerHTML=md(it.a);
+      if(quiz){
+        ans.hidden=true;const sb=el('button','btn small','Show answer');sb.type='button';sb.style.justifySelf='start';
+        sb.onclick=()=>{ans.hidden=!ans.hidden;sb.textContent=ans.hidden?'Show answer':'Hide answer'};
+        d.append(top,sb,ans);
+      }else d.append(top,ans);
+      body.append(d);
+    });
+    if(!items.length)body.append(el('div','note','Nothing here yet. Press Generate.'));
+  }
+  function renderBank(){
+    const box=$('bankCats');box.innerHTML='';
+    CATS.forEach(c=>{
+      const det=el('details','panel cat');det.id='cat-'+c[0];det.open=openCats.has(c[0]);
+      det.addEventListener('toggle',()=>{if(det.open)openCats.add(c[0]);else openCats.delete(c[0])});
+      const sum=document.createElement('summary'),left=el('span');
+      const cnt=el('span','cnt note','');cnt.style.marginLeft='10px';
+      left.append(el('b',null,c[1]),cnt);
+      const g=el('button','btn small gen','Generate');g.type='button';
+      g.onclick=e=>{e.preventDefault();e.stopPropagation();genCat(c[0])};
+      sum.append(left,g);det.append(sum,el('div','body'));box.append(det);fillCat(c[0]);
+    });
+    if(!bankBusy)$('bankStatus').textContent=bankTotal()?bankTotal()+' questions in your bank':'';
+  }
+  async function genCat(key){
+    if(bankBusy)return false;
+    if(!jd.value.trim()){$('bankStatus').textContent='Add the job description in the Role panel first.';$('role').open=true;return false}
+    bankBusy=true;const cat=CATS.find(c=>c[0]===key);
+    $('bankStatus').textContent='Writing '+cat[1]+'…';openCats.add(key);
+    const det=$('cat-'+key);if(det)det.open=true;
+    bank[key]=[];fillCat(key);
+    const prompt='You are preparing a candidate for a job interview. Category: '+cat[1]+' ('+cat[2]+'). Write 12 interview questions with model answers for this category. Cover what an interviewer could realistically ask for this exact role and level, ordered from basic to advanced. Each answer is what the candidate would actually say aloud: 3 to 6 sentences, concrete, with a short example where it helps. For coding questions put the code in a fenced code block. Use exactly this format and nothing else: a line starting with Q: and the question, then a line starting with A: and the answer, then a line containing only ### to end the pair. '+HUMAN_LIVE+' '+accentNote()+NL+NL+roleBlock();
+    let tick=0,ok=false;
+    try{
+      const r=await run(prompt,txt=>{const now=Date.now();if(now-tick<600)return;tick=now;bank[key]=parseQA(txt,false);fillCat(key)},null,'default');
+      bank[key]=parseQA(r.text||'',true);ok=bank[key].length>0;
+      $('bankStatus').textContent=ok?bankTotal()+' questions in your bank':'Could not read the result. Try again.';
+    }catch(e){bank[key]=[];$('bankStatus').textContent=errText(e)}
+    saveBank();fillCat(key);bankBusy=false;return ok;
+  }
+  $('bankAll').onclick=async()=>{
+    if(bankBusy){bankStop=true;$('bankStatus').textContent='Stopping after this category…';return}
+    bankStop=false;$('bankAll').textContent='Stop';
+    for(const c of CATS){if(bankStop)break;if((bank[c[0]]||[]).length)continue;if(!(await genCat(c[0])))break}
+    $('bankAll').textContent='Generate everything';
+  };
+  $('bankClear').onclick=()=>{
+    const b=$('bankClear');
+    if(!clr){b.textContent='Click again to clear';clr=setTimeout(()=>{clr=null;b.textContent='Clear bank'},3000);return}
+    clearTimeout(clr);clr=null;b.textContent='Clear bank';bank={};saveBank();renderBank();$('bankStatus').textContent='Bank cleared';
+  };
+  $('bankSearch').oninput=renderBank;$('bankQuiz').onchange=renderBank;$('bankUnknown').onchange=renderBank;
+  addEventListener('hashchange',()=>{if((location.hash||'')==='#prep'&&!bankBusy)loadBank()});
+  loadBank();
 
   /* ---------- reading size ---------- */
   let big=store.get('pc-big','0')==='1';
