@@ -226,7 +226,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
         </select>
       </label>
     </div>
-    <div class="controls"><label class="f">Voice
+    <div class="controls"><label class="f">Accent
+        <select id="iAccent"><option value="in">Indian English</option><option value="neutral">Neutral English</option></select>
+      </label><label class="f">Voice
         <select id="iVoice">
           <option value="natural">Natural, like a colleague</option>
           <option value="direct">Confident and direct</option>
@@ -579,7 +581,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       const b=el('button','btn small',label);b.type='button';
       b.onclick=async()=>{
         const all=bar.querySelectorAll('button');all.forEach(x=>x.disabled=true);
-        const prompt='You are the ideal candidate for the role below, in a live interview. Speak in first person.'+NL+NL+roleBlock()+NL+NL+'Interviewer: '+q+NL+NL+'Current answer:'+NL+get()+NL+NL+'Rewrite the answer. '+ins+' Keep a natural spoken style and stay consistent with the profile. '+HUMAN+' Output only the new answer.';
+        const prompt='You are the ideal candidate for the role below, in a live interview. Speak in first person.'+NL+NL+roleBlock()+NL+NL+'Interviewer: '+q+NL+NL+'Current answer:'+NL+get()+NL+NL+'Rewrite the answer. '+ins+' Keep a natural spoken style and stay consistent with the profile. '+HUMAN+' '+accentNote()+' Output only the new answer.';
         try{const r=await run(prompt,txt=>{out.innerHTML=md(txt)},null,'quick');const v=r.text||get();set(v);out.innerHTML=md(v)}
         catch(e){out.innerHTML=md(get())+'<p class="err">'+esc(errText(e))+'</p>'}
         all.forEach(x=>x.disabled=false);
@@ -638,7 +640,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     mock.busy=true;$('mSubmit').disabled=true;mockUI('feedback');
     mFB.innerHTML='<div class="a"><div class="out">Reviewing your answer…</div></div>';
     const out=mFB.querySelector('.out');let last='';
-    const prompt='You are a strict but fair interview coach. Score the candidate answer below for the role. Format: the first line must be exactly SCORE: n/10 with n an integer. Then three short sections whose labels are on their own lines: What worked, What to fix, Stronger answer. Under Stronger answer write a model answer in first person that fits the JD and background, no longer than the original unless it needs to be. Write it as natural human speech: contractions, plain words, no lists, no filler openers, no em dashes. Be specific. No flattery.'+NL+NL+roleBlock()+NL+NL+'Question: '+mock.qs[mock.i]+NL+NL+'Candidate answer: '+a;
+    const prompt='You are a strict but fair interview coach. Score the candidate answer below for the role. Format: the first line must be exactly SCORE: n/10 with n an integer. Then three short sections whose labels are on their own lines: What worked, What to fix, Stronger answer. Under Stronger answer write a model answer in first person that fits the JD and background, no longer than the original unless it needs to be. Write it as natural human speech: contractions, plain words, no lists, no filler openers, no em dashes. '+accentNote()+' Be specific. No flattery.'+NL+NL+roleBlock()+NL+NL+'Question: '+mock.qs[mock.i]+NL+NL+'Candidate answer: '+a;
     try{
       const r=await run(prompt,txt=>{last=txt;out.innerHTML=renderFB(txt)},null,'default');
       last=r.text||last;out.innerHTML=renderFB(last);
@@ -751,7 +753,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
 
   /* ---------- human voice ---------- */
   const HUMAN='Write exactly how a real person talks in an interview, not how an AI writes. Use contractions, everyday words and some short sentences. Start by actually answering, with no filler opener, and never say Great question, Certainly, Absolutely or Sure. Sound like one specific person with opinions: say what you actually did, what went wrong, and what you would do differently. Use a natural spoken touch now and then, such as Honestly, I think, or So basically, but not in every sentence. No bullet points, no bold, no headings, no numbered lists, no em dashes, no semicolons, no neat three-part patterns, and never a closing summary that repeats the answer. Avoid words like leverage, utilize, robust, seamless, delve, crucial, holistic, passionate and synergy. Stay modest with numbers and do not over-polish. Only use a list or a code block when the question truly asks for one.';
-  function voiceNote(){return {natural:'Tone: relaxed and conversational, like talking to a colleague.',direct:'Tone: confident and direct, short punchy sentences, little hedging.',warm:'Tone: warm and friendly, a little story-driven.',concise:'Tone: very concise, three or four sentences at most.'}[$('iVoice').value]||''}
+  function accentNote(){return $('iAccent').value==='in'?'Speaking style: natural Indian English, the way a polished professional from India speaks in an interview. Simple clear sentences, respectful and warm, using phrasing like I have worked on, so basically, what I did was, in my previous project, and actually naturally and sparingly. Do not exaggerate it, no slang caricature, no phonetic spelling, and keep it fully professional and easy to understand. Contractions are optional.':''}
+  function voiceNote(){return accentNote()+' '+{natural:'Tone: relaxed and conversational, like talking to a colleague.',direct:'Tone: confident and direct, short punchy sentences, little hedging.',warm:'Tone: warm and friendly, a little story-driven.',concise:'Tone: very concise, three or four sentences at most.'}[$('iVoice').value]||''}
   function humanize(t){
     return String(t).split(String.fromCharCode(8212)).join(', ').split(String.fromCharCode(8211)).join(' to ').replace(/ +,/g,',').replace(/, +/g,', ').replace(/^(certainly|absolutely|sure|of course|great question)[!,. ]+/i,'');
   }
