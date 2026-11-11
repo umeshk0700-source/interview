@@ -444,11 +444,11 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const imgs=picI.blobs();const typed=iq.value.trim();
     if(!typed&&!imgs.length)return;
     const cls=manual===true?'q':classify(typed);
-    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){stopSpec();iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
+    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){stopSpec();discardDraft();iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
     if(busyI)return;
     const q=typed||'(The question is in the attached picture.)';
     busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);
-    const t=addTurn(iThread,q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''),'Candidate');const out=t.querySelector('.out');let last='';
+    const t=takeDraft(q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''));const out=t.querySelector('.out');let last='';
     try{
       const live=manual!==true&&cls!=='q';
       const r=await runI(q,live,imgs,txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
@@ -506,7 +506,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   micBtn.onclick=()=>toggleDict(iq,true,null);
   $('pauseBtn').onclick=()=>{
-    paused=!paused;clearTimeout(sendT);stopSpec();
+    paused=!paused;clearTimeout(sendT);stopSpec();discardDraft();
     if(paused){iq.value='';target.base='';target.finals=''}
     $('pauseBtn').textContent=paused?'Resume listening':"I'm answering: pause";
     $('pauseBtn').setAttribute('aria-pressed',String(paused));
@@ -770,7 +770,14 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
 
   /* ---------- early start: answer while the question is still being asked ---------- */
-  let spec=null,specT=null,specOff=0;
+  let spec=null,specT=null,specOff=0,draftCard=null,lastSpecAt=0;
+  function setBubble(t,qt){let b=t.querySelector('.q');if(!b){b=document.createElement('div');b.className='q';t.prepend(b)}b.textContent=qt}
+  function takeDraft(qt){
+    const d=draftCard;draftCard=null;
+    if(d){setBubble(d,qt);d.querySelector('.meta span').textContent='Candidate';return d}
+    return addTurn(iThread,qt,'Candidate');
+  }
+  function discardDraft(){if(draftCard){draftCard.remove();draftCard=null;$('iEmpty').hidden=!!iThread.querySelector('.turn')}}
   function sameQ(a,b){
     const x=words(a),y=words(b);if(!x.length||!y.length)return false;
     const sy=new Set(y);return x.filter(w=>sy.has(w)).length/Math.max(x.length,y.length)>=0.85;
@@ -779,9 +786,13 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   function startSpec(q){
     stopSpec();
     const ctrl=new AbortController();
+    lastSpecAt=Date.now();$('iEmpty').hidden=true;
+    if(!draftCard){draftCard=addTurn(iThread,q,'Draft, updating as you speak')}
+    else{setBubble(draftCard,q);draftCard.querySelector('.meta span').textContent='Draft, updating as you speak'}
+    const card=draftCard;
     const s={q,ctrl,text:'',done:false,err:null,onText:null,onDone:null};
     spec=s;
-    run(interviewPrompt(q,false),txt=>{s.text=txt;if(s.onText)s.onText(txt)},null,'quick',ctrl.signal)
+    run(interviewPrompt(q,false),txt=>{s.text=txt;if(s.onText)s.onText(txt);else if(draftCard===card)card.querySelector('.out').innerHTML=md(txt)},null,'quick',ctrl.signal)
       .then(r=>{s.text=r.text||s.text})
       .catch(e=>{s.err=e;if(e&&e.code==='rate_limited')specOff=Date.now()+30000})
       .then(()=>{s.done=true;if(s.onDone)s.onDone()});
@@ -794,7 +805,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       if(words(q).length<4||classify(q)!=='q'||echoes(q))return;
       if(spec&&sameQ(spec.q,q))return;
       startSpec(q);
-    },700);
+    },Math.max(700,2500-(Date.now()-lastSpecAt)));
   }
   function adopt(s,cb){
     spec=null;
