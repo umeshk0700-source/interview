@@ -464,18 +464,21 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const imgs=picI.blobs();const typed=iq.value.trim();
     if(!typed&&!imgs.length)return;
     const cls=manual===true?'q':classify(typed);
-    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){stopSpec();discardDraft();iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
+    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){stopSpec();discardDraft();utterStart=0;iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
     if(busyI)return;
-    const q=typed||'(The question is in the attached picture.)';
+    const mrg=manual!==true?mergeTarget(typed):null;const endAt=lastFinalAt;
+    const q=mrg?mrg.q+' '+typed:(typed||'(The question is in the attached picture.)');
     busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);
-    const t=takeDraft(q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''));const out=t.querySelector('.out');let last='';
+    const t=takeDraft(q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''),mrg&&mrg.t);
+    if(mrg){t.querySelectorAll('.refine,.chips').forEach(x=>x.remove());const ix=history.indexOf(mrg.h);if(ix>=0)history.splice(ix,1)}
+    utterStart=0;const out=t.querySelector('.out');let last='';
     try{
       const live=manual!==true&&cls!=='q';
       const r=await runI(q,live,imgs,txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
       picI.clear();
       last=r.text||last;liveAns='';
       if(live&&/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
-      else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);ansUntil=Date.now()+Math.min(90000,Math.max(8000,words(last).length/2.4*1000));wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
+      else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);lastTurn={q,t,h,endAt};ansUntil=Date.now()+Math.min(90000,Math.max(8000,words(last).length/2.4*1000));wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
     if(listening&&target.auto&&$('autoSend').checked&&iq.value.trim())askInterview();
@@ -491,9 +494,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     try{dict=await claude.use('dictation')}catch(e){dict=null}
     if(!dict){micBtn.disabled=true;micBtn.style.opacity=.4;micStatus.textContent='Voice input is not available in this browser. Type the question instead.';return}
     $('eMic').hidden=false;$('mMic').hidden=false;
-    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);maybeSpec();target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
-    dict.onFinal(({text})=>{if(paused)return;target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
-      if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,classify(target.value)==='q'?450:1200)}});
+    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(!utterStart)utterStart=Date.now();if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);maybeSpec();target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
+    dict.onFinal(({text})=>{if(paused)return;lastFinalAt=Date.now();if(!utterStart)utterStart=Date.now();target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
+      if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,classify(target.value)==='q'?1500:2200)}});
     dict.onState(({state,reason})=>{
       if(state==='listening'){setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
       else{
@@ -790,10 +793,19 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
 
   /* ---------- early start: answer while the question is still being asked ---------- */
-  let spec=null,specT=null,specOff=0,draftCard=null,lastSpecAt=0;
+  let spec=null,specT=null,specOff=0,draftCard=null,lastSpecAt=0,lastTurn=null,lastFinalAt=0,utterStart=0;
+  /* a question spoken in pieces: a piece that starts within 5s of the last one is merged into the same question and the same answer card */
+  const MERGE_MS=5000;
+  const NEWQ=/^(next question|next one|moving on|move on|another question|let s move|lets move|okay now|ok now|now let s|now lets|my next question|second question|one more)/;
+  const norm=t=>t.toLowerCase().replace(/[^a-z0-9? ]/g,' ').replace(/ +/g,' ').trim();
+  function mergeTarget(typed){
+    if(!lastTurn||!utterStart||picI.blobs().length)return null;
+    if(utterStart-lastTurn.endAt>MERGE_MS||NEWQ.test(norm(typed)))return null;
+    return lastTurn;
+  }
   function setBubble(t,qt){let b=t.querySelector('.q');if(!b){b=document.createElement('div');b.className='q';t.prepend(b)}b.textContent=qt}
-  function takeDraft(qt){
-    const d=draftCard;draftCard=null;
+  function takeDraft(qt,fb){
+    const d=draftCard||fb||null;draftCard=null;
     if(d){setBubble(d,qt);d.querySelector('.meta span').textContent='Candidate';return d}
     return addTurn(iThread,qt,'Candidate');
   }
@@ -803,10 +815,11 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const sy=new Set(y);return x.filter(w=>sy.has(w)).length/Math.max(x.length,y.length)>=0.85;
   }
   function stopSpec(){clearTimeout(specT);if(spec){try{spec.ctrl.abort()}catch(e){}spec=null}}
-  function startSpec(q){
+  function startSpec(q,sm){
     stopSpec();
     const ctrl=new AbortController();
     lastSpecAt=Date.now();$('iEmpty').hidden=true;
+    if(!draftCard&&sm)draftCard=sm.t;
     if(!draftCard){draftCard=addTurn(iThread,q,'Draft, updating as you speak')}
     else{setBubble(draftCard,q);draftCard.querySelector('.meta span').textContent='Draft, updating as you speak'}
     const card=draftCard;
@@ -823,8 +836,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     specT=setTimeout(()=>{
       const q=target.value.trim();
       if(words(q).length<4||classify(q)!=='q'||echoes(q))return;
-      if(spec&&sameQ(spec.q,q))return;
-      startSpec(q);
+      const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;if(spec&&sameQ(spec.q,fq))return;
+      startSpec(fq,sm);
     },Math.max(700,2500-(Date.now()-lastSpecAt)));
   }
   function adopt(s,cb){
