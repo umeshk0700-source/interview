@@ -91,6 +91,26 @@ textarea{resize:vertical;min-height:90px}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb button{position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);cursor:pointer;line-height:1;font-size:14px}
 textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
+.profcard{display:grid;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:14px}
+.profcard h3{font-size:12px;font-family:var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:500}
+.profcard p,.profcard ul{margin:0}.profcard ul{padding-left:20px}
+.badge{font-size:12px;color:var(--warn);border:1px solid var(--warn);border-radius:6px;padding:6px 10px}
+.chips{display:flex;gap:8px;flex-wrap:wrap;padding:0 16px 14px}
+.chip{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:6px 12px;cursor:pointer;font-size:13px;text-align:left;max-width:100%}
+.chip:hover{border-color:var(--accent)}
+.qd summary{cursor:pointer;padding:12px 16px;font:600 14px var(--f-display)}
+.refine{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.big .a{font-size:19px;line-height:1.65}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.step{padding-top:12px;border-top:2px solid var(--accent);display:grid;gap:6px}
+.step b{font:600 16px var(--f-display)}
+.step span{color:var(--muted);font-size:14px}
+.step small{font:500 12px var(--f-mono);color:var(--accent)}
+.feats{display:flex;gap:8px;flex-wrap:wrap}
+.feats span{border:1px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;color:var(--muted)}
+.mrow{display:grid;grid-template-columns:80px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.prepgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+.prepgrid .btn{text-align:left}
 [hidden]{display:none!important}
 </style>
 
@@ -109,11 +129,16 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       <label class="f">Job description
         <textarea id="jd" rows="7" placeholder="Paste the full job description here"></textarea>
       </label>
+      <label class="f">Company (optional)
+        <input type="text" id="company" placeholder="Company name, used in letters and questions to ask">
+      </label>
       <label class="f">Your background (optional)
         <textarea id="bg" rows="4" placeholder="Years of experience, past roles, projects, achievements, tools you really used"></textarea>
         <span class="hint">Answers about experience stay true to this. Leave it empty and the candidate draws on what the JD calls for, with illustrative examples you should replace.</span>
       </label>
       <div class="row"><button class="btn primary" id="saveRole">Save role</button><span class="note" id="saveNote"></span></div>
+      <div class="row"><button class="btn" id="buildProfile">Build candidate profile</button><span class="note" id="profNote">Creates a pitch, strengths, project stories and likely questions. Every answer then stays consistent with it.</span></div>
+      <div id="profileBox"></div>
     </div>
   </details>
 
@@ -124,12 +149,59 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     </div>
     <div class="doors">
       <button class="door" data-go="interview"><span class="tag">VOICE IN, TEXT OUT</span><h2>Interview</h2><p>Speak the interviewer's question. The candidate answers in writing, in first person, ready to say aloud.</p></button>
-      <button class="door" data-go="exam"><span class="tag">PASTE A QUESTION</span><h2>Exam help</h2><p>MCQs, coding, aptitude, case and short-answer questions, with the answer first and the reasoning after.</p></button>
+      <button class="door" data-go="exam"><span class="tag">TEXT OR PICTURE</span><h2>Exam help</h2><p>MCQs, coding, aptitude, case and short-answer questions, typed or photographed, with the answer first and the reasoning after.</p></button>
+      <button class="door" data-go="mock"><span class="tag">SCORED PRACTICE</span><h2>Mock interview</h2><p>It interviews you with questions built from the JD, scores every answer, and shows a stronger version.</p></button>
+      <button class="door" data-go="prep"><span class="tag">WRITTEN MATERIALS</span><h2>Prep kit</h2><p>Pitch, cover letter, resume bullets, questions to ask, a 30-60-90 plan and a negotiation script.</p></button>
     </div>
   </section>
 
+  <section id="how" class="view">
+    <div class="steps">
+      <div class="step"><small>STEP 1</small><b>Paste the role</b><span>Add the job description and, if you like, your background and the company. Build a candidate profile once.</span></div>
+      <div class="step"><small>STEP 2</small><b>Practise under pressure</b><span>Run a mock interview. Every answer is scored, with a stronger version to learn from.</span></div>
+      <div class="step"><small>STEP 3</small><b>Perform</b><span>Ask by voice and read the answer as it streams. Photograph exam questions for worked solutions.</span></div>
+    </div>
+    <div class="feats"><span>Voice in, text out</span><span>Picture questions</span><span>Ignores your own speech</span><span>Consistent story across answers</span><span>Likely questions from the JD</span><span>Light and dark</span></div>
+  </section>
+
+  <section id="mock" class="view" hidden>
+    <div class="viewhead"><h2>Mock interview</h2></div>
+    <div id="mSetup" class="panel" style="padding:16px;display:grid;gap:12px">
+      <p style="margin:0;color:var(--muted)">The interviewer asks questions tailored to your role. Answer by voice or text. After each answer you get a score, what worked, what to fix and a stronger version, then a final scorecard.</p>
+      <div class="controls">
+        <label class="f">Round<select id="mRound"><option>HR and behavioural</option><option>Technical</option><option>System design and case</option><option>Coding concepts</option><option>Mixed</option></select></label>
+        <label class="f">Difficulty<select id="mLevel"><option>Standard</option><option>Hard</option><option>Easy</option></select></label>
+        <label class="f">Questions<select id="mCount"><option>5</option><option>3</option><option>8</option></select></label>
+      </div>
+      <div class="row"><button class="btn primary" id="mStart">Start mock interview</button><span class="err" id="mErr"></span></div>
+    </div>
+    <div id="mRun" class="view" hidden>
+      <div id="mProg" style="font:500 12px var(--f-mono);color:var(--muted)"></div>
+      <div class="panel" style="padding:16px"><b id="mQuestion" style="font:600 18px/1.4 var(--f-display)"></b></div>
+      <div id="mAnswerBox" class="view">
+        <textarea id="mAnswer" rows="6" placeholder="Answer as you would in the room. Speak with the mic or type."></textarea>
+        <div class="row"><button class="btn primary" id="mSubmit">Submit answer</button><button class="btn small" id="mMic" hidden>Dictate</button><button class="btn small" id="mSkip">Skip question</button></div>
+      </div>
+      <div id="mFeedback"></div>
+      <div><button class="btn primary" id="mNext" hidden>Next question</button></div>
+    </div>
+    <div id="mDone" class="view" hidden>
+      <div class="final"><small>OVERALL SCORE</small><span id="mAvg"></span></div>
+      <div id="mRows"></div>
+      <div class="a"><div class="out" id="mSummary"></div></div>
+      <div><button class="btn primary" id="mAgain">Practise again</button></div>
+    </div>
+  </section>
+
+  <section id="prep" class="view" hidden>
+    <div class="viewhead"><h2>Prep kit</h2></div>
+    <p style="margin:0;color:var(--muted)">Written material generated from your role, background and profile. Add the company name in the Role panel for sharper results.</p>
+    <div class="prepgrid" id="prepGrid"></div>
+    <div class="a" id="prepOutWrap" hidden><div class="meta"><span id="prepTitle"></span><span class="row"><button class="btn small" id="prepRegen">Redo</button><button class="btn small" id="prepCopy" hidden>Copy</button></span></div><div class="out" id="prepBody"></div></div>
+  </section>
+
   <section id="interview" class="view" hidden>
-    <div class="viewhead"><h2>Interview</h2></div>
+    <div class="viewhead"><h2>Interview</h2><button class="btn small" id="sizeBtn" style="margin-left:auto">Larger text</button></div>
     <div class="controls">
       <label class="f">Round
         <select id="iRound">
@@ -161,6 +233,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
         <div class="thumbs" id="iThumbs"></div>
       </div>
     </div>
+    <details class="panel qd" id="qWrap" hidden><summary>Likely questions for this role</summary><div class="chips" id="qChips"></div></details>
     <div class="thread" id="iThread"><div class="empty" id="iEmpty">Answers appear here. The conversation is remembered, so follow-up questions work.</div></div>
   </section>
 
@@ -220,15 +293,15 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const short=first.length>54?first.slice(0,54)+'…':first;
     $('roleState').textContent='Saved · '+short; $('roleState').className='state ok'; $('roleChip').textContent=short;
   }
-  $('saveRole').onclick=()=>{store.set('pc-jd',jd.value);store.set('pc-bg',bg.value);roleLabel();$('saveNote').textContent='Saved';setTimeout(()=>$('saveNote').textContent='',1800);$('role').open=false};
+  $('saveRole').onclick=()=>{store.set('pc-co',$('company').value);store.set('pc-jd',jd.value);store.set('pc-bg',bg.value);roleLabel();$('saveNote').textContent='Saved';setTimeout(()=>$('saveNote').textContent='',1800);$('role').open=false};
   roleLabel();
   if(!jd.value.trim())$('role').open=true;
 
   /* ---------- routing ---------- */
-  const views=['home','interview','exam'];
+  const views=['home','interview','exam','mock','prep'];
   function show(){
     let h=(location.hash||'').replace('#','');if(!views.includes(h))h='home';
-    views.forEach(v=>$(v).hidden=v!==h);$('homeBtn').hidden=h==='home';
+    views.forEach(v=>$(v).hidden=v!==h);$('homeBtn').hidden=h==='home';$('how').hidden=h!=='home';
   }
   addEventListener('hashchange',show);show();
   document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.go});
@@ -259,7 +332,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   /* ---------- Claude ---------- */
   let sample=null;
   (async()=>{try{sample=await claude.use('sample')}catch(e){sample=null}if(!sample)$('foot').textContent='Asking Claude is not available in this view, so answers cannot be generated here. Open the page in Claude.'})();
-  const roleBlock=()=>'JOB DESCRIPTION:\n'+(jd.value.trim()||'(none provided: assume a strong generalist professional)')+'\n\nCANDIDATE BACKGROUND:\n'+(bg.value.trim()||'(none provided)');
+  const roleBlockBase=()=>'JOB DESCRIPTION:\n'+(jd.value.trim()||'(none provided: assume a strong generalist professional)')+'\n\nCANDIDATE BACKGROUND:\n'+(bg.value.trim()||'(none provided)');
 
   async function run(prompt,onText,images,tier){
     if(!sample)throw {message:'Asking Claude is not available here.'};
@@ -360,7 +433,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       picI.clear();
       last=r.text||last;liveAns='';
       if(live&&/^\s*\[\[IGNORE/i.test(last)){t.remove();$('iEmpty').hidden=!!iThread.querySelector('.turn');micStatus.textContent='Ignored: that was not a question for the candidate'}
-      else{t.hidden=false;out.innerHTML=md(last);history.push({q,a:last});wireCopy(t,()=>last)}
+      else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
     if(listening&&target.auto&&$('autoSend').checked&&iq.value.trim())askInterview();
@@ -375,7 +448,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   (async()=>{
     try{dict=await claude.use('dictation')}catch(e){dict=null}
     if(!dict){micBtn.disabled=true;micBtn.style.opacity=.4;micStatus.textContent='Voice input is not available in this browser. Type the question instead.';return}
-    $('eMic').hidden=false;
+    $('eMic').hidden=false;$('mMic').hidden=false;
     dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
     dict.onFinal(({text})=>{if(paused)return;target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
       if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(()=>{if(target.value.trim())askInterview()},700)}});
@@ -434,6 +507,160 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     busyE=false;$('eAsk').disabled=false;
   }
   $('eAsk').onclick=askExam;
+  /* ---------- candidate profile ---------- */
+  const NL=String.fromCharCode(10);
+  let profile=null;try{profile=JSON.parse(store.get('pc-profile','null'))}catch(e){}
+  function profileText(){
+    if(!profile)return '';
+    return NL+NL+'CANDIDATE PROFILE (stay consistent with this in every answer):'+NL+'Pitch: '+profile.pitch+NL+'Strengths: '+(profile.strengths||[]).join('; ')+NL+'Project stories:'+NL+(profile.stories||[]).map(s=>'- '+s.title+': '+s.situation+' Action: '+s.action+' Result: '+s.result).join(NL);
+  }
+  function roleBlock(){const c=$('company').value.trim();return roleBlockBase()+(c?NL+NL+'COMPANY: '+c:'')+profileText()}
+  function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
+  function renderProfile(){
+    const box=$('profileBox'),qc=$('qChips');box.innerHTML='';qc.innerHTML='';
+    if(!profile){$('qWrap').hidden=true;return}
+    const card=el('div','profcard');
+    if(profile.illustrative)card.append(el('div','badge','Illustrative stories. Add your real background above and rebuild to make them yours.'));
+    card.append(el('h3',null,'Pitch'),el('p',null,profile.pitch));
+    card.append(el('h3',null,'Strengths'));const ul=el('ul');(profile.strengths||[]).forEach(s=>ul.append(el('li',null,s)));card.append(ul);
+    card.append(el('h3',null,'Stories'));
+    (profile.stories||[]).forEach(s=>{const d=el('p');d.append(el('strong',null,s.title+'. '),document.createTextNode(s.situation+' '+s.action+' '+s.result));card.append(d)});
+    box.append(card);
+    (profile.questions||[]).forEach(q=>{const b=el('button','chip',q);b.type='button';b.onclick=()=>{location.hash='interview';iq.value=q;askInterview(true)};qc.append(b)});
+    $('qWrap').hidden=!(profile.questions||[]).length;
+  }
+  $('buildProfile').onclick=async()=>{
+    if(!jd.value.trim()){$('profNote').textContent='Add the job description first.';return}
+    store.set('pc-jd',jd.value);store.set('pc-bg',bg.value);roleLabel();
+    const btn=$('buildProfile');btn.disabled=true;$('profNote').textContent='Building the profile…';
+    const prompt='Design the ideal candidate for the role below. Return only a JSON object with these keys: pitch (a 3 to 4 sentence first-person answer to Tell me about yourself), strengths (array of 6 short strings matching the must-have skills in the JD), stories (array of exactly 3 objects with string keys title, situation, action, result: project or achievement stories that prove the key requirements, using modest realistic numbers), questions (array of 14 strings: the questions most likely to be asked, mixing behavioural, technical and role-specific ones). Use the background facts when provided and never contradict them. If no background is provided, write plausible illustrative stories. No markdown, no commentary.'+NL+NL+roleBlockBase();
+    try{
+      const r=await run(prompt,()=>{});const s=r.text||'';
+      const p=JSON.parse(s.slice(s.indexOf('{'),s.lastIndexOf('}')+1));
+      p.illustrative=!bg.value.trim();profile=p;store.set('pc-profile',JSON.stringify(p));renderProfile();
+      $('profNote').textContent='Profile ready. Every answer now follows it.';
+    }catch(e){$('profNote').textContent=e instanceof SyntaxError?'Could not read the result. Try again.':errText(e)}
+    btn.disabled=false;
+  };
+  renderProfile();
+
+  /* ---------- refine an answer ---------- */
+  function wireRefine(t,out,q,get,set){
+    const bar=el('div','refine');
+    [['Shorter','Make it noticeably shorter: about half the length, same key points.'],['More detail','Expand it with more depth, trade-offs and one concrete use case.'],['Add example','Add one concrete, specific example from real work the candidate did that proves the point.']].forEach(([label,ins])=>{
+      const b=el('button','btn small',label);b.type='button';
+      b.onclick=async()=>{
+        const all=bar.querySelectorAll('button');all.forEach(x=>x.disabled=true);
+        const prompt='You are the ideal candidate for the role below, in a live interview. Speak in first person.'+NL+NL+roleBlock()+NL+NL+'Interviewer: '+q+NL+NL+'Current answer:'+NL+get()+NL+NL+'Rewrite the answer. '+ins+' Keep a natural spoken style and stay consistent with the profile. Output only the new answer.';
+        try{const r=await run(prompt,txt=>{out.innerHTML=md(txt)},null,'quick');const v=r.text||get();set(v);out.innerHTML=md(v)}
+        catch(e){out.innerHTML=md(get())+'<p class="err">'+esc(errText(e))+'</p>'}
+        all.forEach(x=>x.disabled=false);
+      };
+      bar.append(b);
+    });
+    out.parentNode.append(bar);
+  }
+
+  $('company').value=store.get('pc-co','');
+
+  /* ---------- mock interview ---------- */
+  const mock={qs:[],i:0,res:[],busy:false};
+  const mA=$('mAnswer'),mFB=$('mFeedback');
+  function mockUI(state){
+    $('mSetup').hidden=state!=='setup';
+    $('mRun').hidden=!(state==='ask'||state==='feedback');
+    $('mDone').hidden=state!=='done';
+    $('mAnswerBox').hidden=state!=='ask';
+    $('mNext').hidden=state!=='feedback';
+  }
+  function renderFB(txt){
+    const m=txt.match(/SCORE: *([0-9]+)/i);
+    if(!m)return md(txt);
+    const rest=txt.slice(txt.indexOf(NL)+1);
+    return '<div class="final"><small>SCORE</small>'+Math.min(10,+m[1])+' / 10</div>'+md(rest);
+  }
+  $('mStart').onclick=async()=>{
+    if(!jd.value.trim()){$('mErr').textContent='Add the job description in the Role panel first.';$('role').open=true;return}
+    $('mErr').textContent='';$('mStart').disabled=true;$('mStart').textContent='Preparing questions…';
+    const n=+$('mCount').value;
+    const prompt='You are a senior interviewer for the role below. Write '+n+' interview questions for a '+$('mRound').value+' round at '+$('mLevel').value+' difficulty, ordered the way a real interview flows, each tailored to the JD. Return only a JSON array of '+n+' strings. No commentary.'+NL+NL+roleBlock();
+    try{
+      const r=await run(prompt,()=>{});const s=r.text||'';
+      const arr=JSON.parse(s.slice(s.indexOf('['),s.lastIndexOf(']')+1));
+      if(!Array.isArray(arr)||!arr.length)throw new SyntaxError('empty');
+      mock.qs=arr.slice(0,n).map(String);mock.i=0;mock.res=[];showMockQ();
+    }catch(e){$('mErr').textContent=e instanceof SyntaxError?'Could not build the questions. Try again.':errText(e)}
+    $('mStart').disabled=false;$('mStart').textContent='Start mock interview';
+  };
+  function showMockQ(){
+    mockUI('ask');$('mProg').textContent='Question '+(mock.i+1)+' of '+mock.qs.length;
+    $('mQuestion').textContent=mock.qs[mock.i];mA.value='';mFB.innerHTML='';mA.focus();
+  }
+  $('mSubmit').onclick=async()=>{
+    const a=mA.value.trim();if(!a||mock.busy)return;
+    mock.busy=true;$('mSubmit').disabled=true;mockUI('feedback');
+    mFB.innerHTML='<div class="a"><div class="out">Reviewing your answer…</div></div>';
+    const out=mFB.querySelector('.out');let last='';
+    const prompt='You are a strict but fair interview coach. Score the candidate answer below for the role. Format: the first line must be exactly SCORE: n/10 with n an integer. Then three short sections whose labels are on their own lines: What worked, What to fix, Stronger answer. Under Stronger answer write a model answer in first person that fits the JD and background, no longer than the original unless it needs to be. Be specific. No flattery.'+NL+NL+roleBlock()+NL+NL+'Question: '+mock.qs[mock.i]+NL+NL+'Candidate answer: '+a;
+    try{
+      const r=await run(prompt,txt=>{last=txt;out.innerHTML=renderFB(txt)},null,'default');
+      last=r.text||last;out.innerHTML=renderFB(last);
+      const m=last.match(/SCORE: *([0-9]+)/i);
+      mock.res.push({q:mock.qs[mock.i],a,score:m?Math.min(10,+m[1]):null});
+      $('mNext').textContent=mock.i+1>=mock.qs.length?'See my scorecard':'Next question';
+    }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';mockUI('ask')}
+    mock.busy=false;$('mSubmit').disabled=false;
+  };
+  function advance(){if(mock.i+1>=mock.qs.length)finishMock();else{mock.i++;showMockQ()}}
+  $('mNext').onclick=advance;
+  $('mSkip').onclick=()=>{mock.res.push({q:mock.qs[mock.i],a:'',score:0});advance()};
+  $('mMic').onclick=()=>toggleDict(mA,false,$('mMic'));
+  $('mAgain').onclick=()=>mockUI('setup');
+  async function finishMock(){
+    mockUI('done');
+    const sc=mock.res.map(r=>r.score).filter(x=>x!==null);
+    const avg=sc.length?sc.reduce((a,b)=>a+b,0)/sc.length:0;
+    $('mAvg').textContent=avg.toFixed(1)+' / 10';
+    const rows=$('mRows');rows.innerHTML='';
+    mock.res.forEach((r,i)=>{const d=el('div','mrow');d.append(el('b',null,'Q'+(i+1)+'  '+(r.score==null?'-':r.score)+'/10'),el('span',null,r.q));rows.append(d)});
+    const out=$('mSummary');out.textContent='Writing your summary…';
+    const results=mock.res.map((r,i)=>'Q'+(i+1)+': '+r.q+NL+'Answer: '+(r.a||'(skipped)').slice(0,500)+NL+'Score: '+(r.score==null?'n/a':r.score)).join(NL+NL);
+    const prompt='You are an interview coach. From the mock interview results below, write: the 3 biggest patterns to fix, the strongest skill to lead with, and a 3-step plan for the next practice session. Short bullets, specific to this candidate and role.'+NL+NL+roleBlock()+NL+NL+results;
+    try{const r=await run(prompt,txt=>{out.innerHTML=md(txt)},null,'default');out.innerHTML=md(r.text||'')}
+    catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
+  }
+
+  /* ---------- prep kit ---------- */
+  const PREP=[
+    ['pitch','60-second pitch','Write a 60-second answer to Tell me about yourself, in first person, tuned to this role. Spoken style with three beats: who I am, proof I can do this job, why this role.'],
+    ['cover','Cover letter','Write a one-page cover letter for this role. Open with a specific hook, map two or three JD requirements to concrete achievements, close with a confident ask. 250 to 330 words. Do not invent employers; use the background and profile.'],
+    ['resume','Resume bullets','Write 8 resume bullets tailored to this JD from the background. Start each with a strong verb, include a measurable result when the background supports one, and mirror the JD keywords. Where a number is missing, write [add your number].'],
+    ['ask','Questions to ask them','Write 10 smart questions the candidate should ask the interviewer, grouped under: team and role, success in the first 90 days, growth, and challenges. Each should show research and judgement.'],
+    ['plan','30-60-90 day plan','Write a 30-60-90 day plan for this role covering learning, first contributions and ownership. Specific to the JD responsibilities, as bullets.'],
+    ['gaps','Gaps and how to answer','List the gaps between the JD and the background (or the profile if there is no background). For each gap give an honest way to handle it in an interview: a bridge from related experience plus a learning plan. No lying.'],
+    ['salary','Negotiation script','Write a negotiation script: how to answer the expected salary question, how to counter an offer, and what to say if the number is below range. Include exact phrases.'],
+    ['thanks','Thank-you email','Write a short thank-you email to send after the interview, with placeholders for the interviewer name and one topic discussed.']
+  ];
+  const prepCache={};let prepCur=null;
+  PREP.forEach(p=>{const b=el('button','btn',p[1]);b.type='button';b.onclick=()=>runPrep(p,false);$('prepGrid').append(b)});
+  async function runPrep(p,force){
+    prepCur=p;const key=p[0],body=$('prepBody');
+    $('prepOutWrap').hidden=false;$('prepTitle').textContent=p[1];$('prepCopy').hidden=true;
+    if(prepCache[key]&&!force){body.innerHTML=md(prepCache[key]);$('prepCopy').hidden=false;return}
+    if(!jd.value.trim()){body.innerHTML='<span class="err">Add the job description in the Role panel first.</span>';$('role').open=true;return}
+    body.textContent='Writing…';
+    const prompt='You are an expert career coach writing for this candidate. '+p[2]+NL+NL+roleBlock();
+    try{const r=await run(prompt,txt=>{body.innerHTML=md(txt)},null,'default');prepCache[key]=r.text||'';body.innerHTML=md(prepCache[key]);$('prepCopy').hidden=false}
+    catch(e){body.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
+  }
+  $('prepRegen').onclick=()=>{if(prepCur)runPrep(prepCur,true)};
+  $('prepCopy').onclick=async()=>{const b=$('prepCopy');try{await navigator.clipboard.writeText(prepCache[prepCur[0]]||'');b.textContent='Copied'}catch(e){b.textContent='Select text to copy'}setTimeout(()=>b.textContent='Copy',1600)};
+
+  /* ---------- reading size ---------- */
+  let big=store.get('pc-big','0')==='1';
+  function applySize(){iThread.classList.toggle('big',big);$('sizeBtn').textContent=big?'Smaller text':'Larger text'}
+  $('sizeBtn').onclick=()=>{big=!big;store.set('pc-big',big?'1':'0');applySize()};applySize();
+
   $('eClear').onclick=()=>{$('eq').value='';picE.clear();$('eq').focus()};
   $('eq').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askExam()}});
 })();
