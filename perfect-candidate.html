@@ -226,6 +226,14 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
         </select>
       </label>
     </div>
+    <div class="controls"><label class="f">Voice
+        <select id="iVoice">
+          <option value="natural">Natural, like a colleague</option>
+          <option value="direct">Confident and direct</option>
+          <option value="warm">Warm and story-driven</option>
+          <option value="concise">Very concise</option>
+        </select>
+      </label></div>
     <div class="panel mic">
       <button class="micbtn" id="micBtn" aria-label="Start listening"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg></button>
       <div class="qbox">
@@ -319,7 +327,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   /* ---------- tiny markdown ---------- */
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const inl=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
-  function md(src){
+  function md(src){src=humanize(src);
     const out=[];const parts=src.split(/```/);
     parts.forEach((p,i)=>{
       if(i%2){const body=p.replace(/^[^\n]*\n/,'');out.push('<pre><code>'+esc(body.replace(/\n$/,''))+'</code></pre>');return}
@@ -413,8 +421,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   const roundNote={general:'a mixed interview',hr:'an HR and behavioural round: use the STAR structure for experience questions, stay warm and specific',technical:'',tech:'a technical round: be precise, state trade-offs and when you would pick each option, mention real use cases',design:'a system design or case round: clarify requirements, outline the architecture, then trade-offs and risks',coding:'a coding round: give the approach, working code, complexity and edge cases'};
   function interviewPrompt(q,live){
     const len=$('iLen').value==='short'
-      ?'Give a spoken answer of about 6 to 10 sentences (30 to 60 seconds). Plain sentences, no headings, no bullet lists unless the question asks for a list. Sound natural, confident and humble.'
-      :'Give a detailed answer with clear structure. Short paragraphs or bullets are fine. Include concrete use cases and trade-offs.';
+      ?'Give a spoken answer of about 6 to 10 sentences (30 to 60 seconds). Plain sentences, no headings, no bullet lists unless the question asks for a list. '+HUMAN+' '+voiceNote()
+      :'Give a detailed answer with clear structure. Short paragraphs or bullets are fine. Include concrete use cases and trade-offs. '+HUMAN+' '+voiceNote();
     const hist=history.slice(-6).map(h=>'Interviewer: '+h.q+'\nCandidate: '+h.a).join('\n\n');
     return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. When asked about experience, use the background provided; if none is provided, give a realistic, modest example consistent with the JD. Never claim certifications, employers or numbers that the background contradicts. If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+roleBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+(live?'\n\nLIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else. Short or informal questions such as what is SQL are questions: answer them. When in doubt, answer.':'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
   }
@@ -427,7 +435,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   function wireCopy(t,getText){
     const b=t.querySelector('.meta button');b.hidden=false;
-    b.onclick=async()=>{try{await navigator.clipboard.writeText(getText());b.textContent='Copied'}catch(e){b.textContent='Select text to copy'}setTimeout(()=>b.textContent='Copy',1600)};
+    b.onclick=async()=>{try{await navigator.clipboard.writeText(humanize(getText()));b.textContent='Copied'}catch(e){b.textContent='Select text to copy'}setTimeout(()=>b.textContent='Copy',1600)};
   }
   async function askInterview(manual){
     const imgs=picI.blobs();const typed=iq.value.trim();
@@ -571,7 +579,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       const b=el('button','btn small',label);b.type='button';
       b.onclick=async()=>{
         const all=bar.querySelectorAll('button');all.forEach(x=>x.disabled=true);
-        const prompt='You are the ideal candidate for the role below, in a live interview. Speak in first person.'+NL+NL+roleBlock()+NL+NL+'Interviewer: '+q+NL+NL+'Current answer:'+NL+get()+NL+NL+'Rewrite the answer. '+ins+' Keep a natural spoken style and stay consistent with the profile. Output only the new answer.';
+        const prompt='You are the ideal candidate for the role below, in a live interview. Speak in first person.'+NL+NL+roleBlock()+NL+NL+'Interviewer: '+q+NL+NL+'Current answer:'+NL+get()+NL+NL+'Rewrite the answer. '+ins+' Keep a natural spoken style and stay consistent with the profile. '+HUMAN+' Output only the new answer.';
         try{const r=await run(prompt,txt=>{out.innerHTML=md(txt)},null,'quick');const v=r.text||get();set(v);out.innerHTML=md(v)}
         catch(e){out.innerHTML=md(get())+'<p class="err">'+esc(errText(e))+'</p>'}
         all.forEach(x=>x.disabled=false);
@@ -630,7 +638,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     mock.busy=true;$('mSubmit').disabled=true;mockUI('feedback');
     mFB.innerHTML='<div class="a"><div class="out">Reviewing your answer…</div></div>';
     const out=mFB.querySelector('.out');let last='';
-    const prompt='You are a strict but fair interview coach. Score the candidate answer below for the role. Format: the first line must be exactly SCORE: n/10 with n an integer. Then three short sections whose labels are on their own lines: What worked, What to fix, Stronger answer. Under Stronger answer write a model answer in first person that fits the JD and background, no longer than the original unless it needs to be. Be specific. No flattery.'+NL+NL+roleBlock()+NL+NL+'Question: '+mock.qs[mock.i]+NL+NL+'Candidate answer: '+a;
+    const prompt='You are a strict but fair interview coach. Score the candidate answer below for the role. Format: the first line must be exactly SCORE: n/10 with n an integer. Then three short sections whose labels are on their own lines: What worked, What to fix, Stronger answer. Under Stronger answer write a model answer in first person that fits the JD and background, no longer than the original unless it needs to be. Write it as natural human speech: contractions, plain words, no lists, no filler openers, no em dashes. Be specific. No flattery.'+NL+NL+roleBlock()+NL+NL+'Question: '+mock.qs[mock.i]+NL+NL+'Candidate answer: '+a;
     try{
       const r=await run(prompt,txt=>{last=txt;out.innerHTML=renderFB(txt)},null,'default');
       last=r.text||last;out.innerHTML=renderFB(last);
@@ -678,7 +686,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(prepCache[key]&&!force){body.innerHTML=md(prepCache[key]);$('prepCopy').hidden=false;return}
     if(!jd.value.trim()){body.innerHTML='<span class="err">Add the job description in the Role panel first.</span>';$('role').open=true;return}
     body.textContent='Writing…';
-    const prompt='You are an expert career coach writing for this candidate. '+p[2]+NL+NL+roleBlock();
+    const prompt='You are an expert career coach writing for this candidate. '+p[2]+' Make it sound like a real person wrote it: plain words, no buzzwords, no cliches, no em dashes.'+NL+NL+roleBlock();
     try{const r=await run(prompt,txt=>{body.innerHTML=md(txt)},null,'default');prepCache[key]=r.text||'';body.innerHTML=md(prepCache[key]);$('prepCopy').hidden=false}
     catch(e){body.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
   }
@@ -740,6 +748,13 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       history.length=0;wireCopy(t,()=>stripWeak(full));
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
   };
+
+  /* ---------- human voice ---------- */
+  const HUMAN='Write exactly how a real person talks in an interview, not how an AI writes. Use contractions, everyday words and some short sentences. Start by actually answering, with no filler opener, and never say Great question, Certainly, Absolutely or Sure. Sound like one specific person with opinions: say what you actually did, what went wrong, and what you would do differently. Use a natural spoken touch now and then, such as Honestly, I think, or So basically, but not in every sentence. No bullet points, no bold, no headings, no numbered lists, no em dashes, no semicolons, no neat three-part patterns, and never a closing summary that repeats the answer. Avoid words like leverage, utilize, robust, seamless, delve, crucial, holistic, passionate and synergy. Stay modest with numbers and do not over-polish. Only use a list or a code block when the question truly asks for one.';
+  function voiceNote(){return {natural:'Tone: relaxed and conversational, like talking to a colleague.',direct:'Tone: confident and direct, short punchy sentences, little hedging.',warm:'Tone: warm and friendly, a little story-driven.',concise:'Tone: very concise, three or four sentences at most.'}[$('iVoice').value]||''}
+  function humanize(t){
+    return String(t).split(String.fromCharCode(8212)).join(', ').split(String.fromCharCode(8211)).join(' to ').replace(/^(certainly|absolutely|sure|of course|great question)[!,. ]+/i,'');
+  }
 
   /* ---------- who is speaking: interviewer or candidate ---------- */
   /* Browsers give text only, not the speaker, so the page infers it from wording, timing and context. */
