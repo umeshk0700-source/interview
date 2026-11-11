@@ -376,7 +376,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
 
   async function run(prompt,onText,images,tier,signal){
     if(!sample)throw {message:'Asking Claude is not available here.'};
-    const opts={onText:({text})=>onText(text),cache:false,modelTier:tier||'default'};if(signal)opts.signal=signal;
+    const opts={onText:({text})=>{if(!/^thinking[. …]*$/i.test(String(text).trim()))onText(text)},cache:false,modelTier:tier||'default'};if(signal)opts.signal=signal;
     if(images&&images.length){
       let lim=null;try{lim=await sample.limits()}catch(e){}
       if(!lim||!lim.images)throw {message:'Pictures are not supported in this view. Type the question instead.'};
@@ -822,7 +822,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(!draftCard&&sm)draftCard=sm.t;
     if(!draftCard){draftCard=addTurn(iThread,q,'Draft, updating as you speak')}
     else{setBubble(draftCard,q);draftCard.querySelector('.meta span').textContent='Draft, updating as you speak'}
-    const card=draftCard;
+    const card=draftCard;{const o0=card.querySelector('.out');if(o0.textContent==='Thinking…')o0.textContent='Listening to the question…'}
     const s={q,ctrl,text:'',done:false,err:null,onText:null,onDone:null};
     spec=s;
     run(interviewPrompt(q,false),txt=>{s.text=txt;if(s.onText)s.onText(txt);else if(draftCard===card)card.querySelector('.out').innerHTML=md(txt)},null,'quick',ctrl.signal)
