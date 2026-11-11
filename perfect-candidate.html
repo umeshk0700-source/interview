@@ -406,7 +406,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       ?'Give a spoken answer of about 6 to 10 sentences (30 to 60 seconds). Plain sentences, no headings, no bullet lists unless the question asks for a list. Sound natural, confident and humble.'
       :'Give a detailed answer with clear structure. Short paragraphs or bullets are fine. Include concrete use cases and trade-offs.';
     const hist=history.slice(-6).map(h=>'Interviewer: '+h.q+'\nCandidate: '+h.a).join('\n\n');
-    return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. When asked about experience, use the background provided; if none is provided, give a realistic, modest example consistent with the JD. Never claim certifications, employers or numbers that the background contradicts. If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+roleBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+(live?'\n\nLIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else.':'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
+    return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. When asked about experience, use the background provided; if none is provided, give a realistic, modest example consistent with the JD. Never claim certifications, employers or numbers that the background contradicts. If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+roleBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+(live?'\n\nLIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else. Short or informal questions such as what is SQL are questions: answer them. When in doubt, answer.':'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
   }
   function addTurn(thread,qText,tag){
     const t=document.createElement('div');t.className='turn';
@@ -432,13 +432,13 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       const r=await run(interviewPrompt(q,live)+(imgs.length?picNote:''),txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)},imgs,'quick');
       picI.clear();
       last=r.text||last;liveAns='';
-      if(live&&/^\s*\[\[IGNORE/i.test(last)){t.remove();$('iEmpty').hidden=!!iThread.querySelector('.turn');micStatus.textContent='Ignored: that was not a question for the candidate'}
+      if(live&&/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{t.remove();iq.value=q;askInterview(true)};out.append(ab)}
       else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
     if(listening&&target.auto&&$('autoSend').checked&&iq.value.trim())askInterview();
   }
-  $('iAsk').onclick=askInterview;
+  $('iAsk').onclick=()=>askInterview(true);
   iq.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askInterview(true)}});
 
   /* ---------- dictation ---------- */
