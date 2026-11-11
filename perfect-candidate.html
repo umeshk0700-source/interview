@@ -236,9 +236,10 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
           <button class="btn small" id="pauseBtn" aria-pressed="false">I'm answering: pause</button>
           <label class="btn small" for="iFile">Attach picture</label><input type="file" id="iFile" accept="image/*" multiple hidden>
           <label class="chk"><input type="checkbox" id="autoSend" checked> Answer the moment I finish a question</label>
-          <label class="chk"><input type="checkbox" id="keepOn"> Keep listening for the next question</label>
+          <label class="chk"><input type="checkbox" id="keepOn" checked> Continuous mic (keep listening)</label>
         </div>
         <div class="thumbs" id="iThumbs"></div>
+        <div class="note">Continuous mode keeps listening until you tap the mic. Hold Space while you speak and everything you say is ignored.</div>
       </div>
     </div>
     <details class="panel qd" id="qWrap" hidden><summary>Likely questions for this role</summary><div class="chips" id="qChips"></div></details>
@@ -431,18 +432,19 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   async function askInterview(manual){
     const imgs=picI.blobs();const typed=iq.value.trim();
     if(!typed&&!imgs.length)return;
-    if(manual!==true&&(paused||echoes(typed))){iq.value='';target.base='';target.finals='';return}
+    const cls=manual===true?'q':classify(typed);
+    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
     if(busyI)return;
     const q=typed||'(The question is in the attached picture.)';
     busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);
     const t=addTurn(iThread,q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''),'Candidate');const out=t.querySelector('.out');let last='';
     try{
-      const live=manual!==true;
+      const live=manual!==true&&cls!=='q';
       const r=await run(interviewPrompt(q,live)+(imgs.length?picNote:''),txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)},imgs,'quick');
       picI.clear();
       last=r.text||last;liveAns='';
       if(live&&/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
-      else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
+      else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);ansUntil=Date.now()+Math.min(90000,Math.max(8000,words(last).length/2.4*1000));wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
     if(listening&&target.auto&&$('autoSend').checked&&iq.value.trim())askInterview();
@@ -451,7 +453,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   iq.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askInterview(true)}});
 
   /* ---------- dictation ---------- */
-  let dict=null,listening=false,sendT=null;
+  let dict=null,listening=false,sendT=null,userStop=false;
   const micBtn=$('micBtn'),micStatus=$('micStatus');
   function setMic(on,msg){listening=on;micBtn.classList.toggle('on',on);micBtn.setAttribute('aria-label',on?'Stop listening':'Start listening');if(msg)micStatus.textContent=msg}
   (async()=>{
@@ -460,12 +462,15 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     $('eMic').hidden=false;$('mMic').hidden=false;
     dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
     dict.onFinal(({text})=>{if(paused)return;target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
-      if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,1200)}});
+      if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,classify(target.value)==='q'?450:1200)}});
     dict.onState(({state,reason})=>{
       if(state==='listening'){setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
       else{
         const was=listening;clearTimeout(sendT);setMic(false,'Tap the mic and ask the question');if(target.btn)target.btn.textContent='Dictate';
         if(was&&target.auto&&$('autoSend').checked&&target.value.trim())askInterview();
+        if(was&&target.auto&&$('keepOn').checked&&!userStop&&reason!=='viewer_stopped'&&reason!=='hidden'){
+          setTimeout(()=>{if(!listening&&!userStop&&dict){bindTarget(target.el,true,null);dict.start().catch(()=>{micStatus.textContent='Mic stopped. Tap the mic to resume.'})}},300);
+        }
       }
     });
   })();
@@ -482,8 +487,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   async function toggleDict(el,auto,btn){
     if(!dict)return;
-    if(listening){try{await dict.stop()}catch(e){}return}
-    bindTarget(el,auto,btn);
+    if(listening){userStop=true;try{await dict.stop()}catch(e){}return}
+    userStop=false;bindTarget(el,auto,btn);
     try{await dict.start();clearTimeout(sendT);if(auto)sendT=setTimeout(()=>{if(listening&&!el.value.trim()&&dict)dict.stop().catch(()=>{})},10000)}catch(e){
       setMic(false,e&&e.code==='not_granted'?'Microphone access was declined. Type the question instead.':'Could not start listening. Try again.');
     }
@@ -735,6 +740,36 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       history.length=0;wireCopy(t,()=>stripWeak(full));
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
   };
+
+  /* ---------- who is speaking: interviewer or candidate ---------- */
+  /* Browsers give text only, not the speaker, so the page infers it from wording, timing and context. */
+  let ansUntil=0,holdT=null,pausedByHold=false;
+  const QSTART=/^(so |and |okay |ok |now |next |alright |great |right |um |uh |well )*(what|why|how|when|where|which|who|can you|could you|would you|will you|do you|did you|have you|are you|is there|is it|tell me|walk me|explain|describe|define|give me|share|talk me|compare|suppose|imagine|consider|any questions|let s|lets)/i;
+  const ASK=/^(so |and |okay |ok |now )*(i would like you|i d like you|i want you|i wanna know|i was wondering|i would love to hear|i d love to hear|i d like to know|i would like to know|i d like to hear)/i;
+  const CANDSTART=/^(so |and |um |uh |well |yeah |yes |okay )*(i |i m |i ve |we |my |in my |at my |when i |for me |honestly|basically|that is a good question|great question|good question|thank you|thanks)/i;
+  const NARR=/^(what|how|why|when|where) (i|we|my) /i;
+  function classify(t){
+    const s=t.trim().toLowerCase().replace(/[^a-z0-9? ]/g,' ').replace(/ +/g,' ').trim();
+    if(!s)return '';
+    const inWindow=Date.now()<ansUntil;
+    if(ASK.test(s))return 'q';
+    if(NARR.test(s))return inWindow?'cand':'?';
+    const hasQ=t.indexOf('?')>=0||QSTART.test(s),cand=CANDSTART.test(s);
+    if(hasQ&&!cand)return 'q';
+    if(cand&&!hasQ)return 'cand';
+    return inWindow?'cand':'?';
+  }
+  addEventListener('keydown',e=>{
+    if(e.code!=='Space'||e.repeat||(location.hash||'')!=='#interview')return;
+    const tag=((e.target&&e.target.tagName)||'').toLowerCase();
+    if(tag==='input'||tag==='textarea'||tag==='select'||tag==='button')return;
+    e.preventDefault();clearTimeout(holdT);
+    if(!paused){paused=true;pausedByHold=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);micStatus.textContent='Holding Space: your speech is ignored'}
+  });
+  addEventListener('keyup',e=>{
+    if(e.code!=='Space'||!pausedByHold)return;
+    holdT=setTimeout(()=>{paused=false;pausedByHold=false;micStatus.textContent=listening?'Listening… speak the question':'Tap the mic and ask the question'},1200);
+  });
 
   /* ---------- reading size ---------- */
   let big=store.get('pc-big','0')==='1';
