@@ -273,8 +273,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       </label>
       <label class="f">Detail
         <select id="eDepth">
+          <option value="answer" selected>Answer only</option>
           <option value="brief">Answer and one-line reason</option>
-          <option value="steps" selected>Answer with step-by-step working</option>
+          <option value="steps">Answer with step-by-step working</option>
           <option value="teach">Teach me the concept too</option>
         </select>
       </label>
@@ -517,7 +518,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   /* ---------- exam ---------- */
   let busyE=false;
   const typeNote={auto:'Work out the question type yourself.',mcq:'This is a multiple choice question.',coding:'This is a coding problem.',aptitude:'This is an aptitude, logic or maths problem.',short:'This is a short answer question.',essay:'This is an essay or descriptive question.',case:'This is a case study or design question.'};
-  const depthNote={brief:'After the final answer give a single-line reason only.',steps:'After the final answer, show step-by-step working. For multiple choice, also say briefly why each other option is wrong.',teach:'After the final answer, show step-by-step working, then explain the underlying concept in a short paragraph and name one related thing that is often asked.'};
+  const depthNote={answer:'Reply with the final answer only. No explanation, no working, no preamble. For multiple choice give just the option letter and its text. For short answers give one or two sentences at most. Keep the ANSWER line, and for a coding problem put only the code after it with no commentary.',brief:'After the final answer give a single-line reason only.',steps:'After the final answer, show step-by-step working. For multiple choice, also say briefly why each other option is wrong.',teach:'After the final answer, show step-by-step working, then explain the underlying concept in a short paragraph and name one related thing that is often asked.'};
   async function askExam(){
     const imgs=picE.blobs();const typed=$('eq').value.trim();
     if((!typed&&!imgs.length)||busyE)return;
