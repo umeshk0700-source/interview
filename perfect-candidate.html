@@ -1,0 +1,356 @@
+<title>Perfect Candidate</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+/* Layout: a single-column workspace. Home = two large doors (Interview / Exam Help).
+   Each door opens a working view. The JD sits in a collapsible Role panel shared by both. */
+:root{
+  --bg:#EDF0F3; --surface:#FFFFFF; --surface-2:#E3E8ED; --ink:#13202C; --muted:#5A6A78;
+  --line:#CFD7DF; --accent:#1F4FE0; --accent-ink:#FFFFFF; --accent-soft:#DDE6FC;
+  --good:#17803D; --warn:#B45309; --bad:#B42318;
+  --f-display:"Space Grotesk",system-ui,sans-serif; --f-body:"Inter",system-ui,sans-serif; --f-mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E141A; --surface:#161E26; --surface-2:#1E2832; --ink:#E6ECF2; --muted:#92A2B1;
+  --line:#2A3743; --accent:#6C8DFF; --accent-ink:#0B1220; --accent-soft:#1D2A52;
+  --good:#4CC27A; --warn:#E3A04A; --bad:#F27A6E; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E141A; --surface:#161E26; --surface-2:#1E2832; --ink:#E6ECF2; --muted:#92A2B1;
+  --line:#2A3743; --accent:#6C8DFF; --accent-ink:#0B1220; --accent-soft:#1D2A52;
+  --good:#4CC27A; --warn:#E3A04A; --bad:#F27A6E; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 var(--f-body);
+  padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:880px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+button,select,textarea,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:10px}
+.brand b{font:700 20px var(--f-display)}
+.brand span{font:500 12px var(--f-mono);color:var(--muted)}
+.nav{display:flex;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:disabled{opacity:.5;cursor:not-allowed}
+.btn.small{padding:5px 10px;font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.role{padding:0}
+.role summary{list-style:none;cursor:pointer;padding:12px 16px;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.role summary::-webkit-details-marker{display:none}
+.role .state{font:500 12px var(--f-mono);color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.role .state.ok{color:var(--good)}
+.role .body{padding:4px 16px 16px;display:grid;gap:12px;border-top:1px solid var(--line)}
+label.f{display:grid;gap:6px;font:500 12px var(--f-mono);color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+textarea,select,input[type=text]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;text-transform:none;letter-spacing:0;font:15px/1.5 var(--f-body);color:var(--ink)}
+textarea{resize:vertical;min-height:90px}
+.hint{font:400 12px var(--f-body);color:var(--muted);text-transform:none;letter-spacing:0}
+.doors{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.door{text-align:left;padding:24px;border-radius:12px;border:1px solid var(--line);background:var(--surface);cursor:pointer;display:grid;gap:10px;min-width:0}
+.door:hover{border-color:var(--accent)}
+.door .tag{font:500 12px var(--f-mono);color:var(--accent)}
+.door h2{font-size:26px}
+.door p{margin:0;color:var(--muted)}
+.hero h1{font-size:clamp(28px,5vw,40px);line-height:1.1}
+.hero p{color:var(--muted);margin:10px 0 0;max-width:60ch}
+.view{display:flex;flex-direction:column;gap:16px}
+.viewhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.viewhead h2{font-size:24px}
+.controls{display:flex;gap:10px;flex-wrap:wrap}
+.controls>*{flex:1 1 160px;min-width:0}
+.mic{display:flex;align-items:center;gap:14px;padding:16px;flex-wrap:wrap}
+.micbtn{width:64px;height:64px;border-radius:50%;border:2px solid var(--accent);background:var(--accent-soft);cursor:pointer;display:grid;place-items:center;flex:none}
+.micbtn svg{width:26px;height:26px;fill:var(--accent)}
+.micbtn.on{background:var(--bad);border-color:var(--bad);animation:pulse 1.2s infinite}
+.micbtn.on svg{fill:#fff}
+@keyframes pulse{50%{box-shadow:0 0 0 10px transparent;box-shadow:0 0 0 10px color-mix(in srgb,var(--bad) 25%,transparent)}}
+@media (prefers-reduced-motion:reduce){.micbtn.on{animation:none}}
+.mic .status{font:500 12px var(--f-mono);color:var(--muted)}
+.qbox{flex:1 1 260px;min-width:0;display:grid;gap:8px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
+.thread{display:flex;flex-direction:column;gap:14px}
+.turn{display:grid;gap:8px}
+.q{align-self:flex-end;max-width:88%;background:var(--accent-soft);border-radius:12px 12px 2px 12px;padding:10px 14px}
+.a{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
+.a .meta{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:6px;font:500 12px var(--f-mono);color:var(--muted)}
+.a p{margin:0 0 10px}.a p:last-child{margin:0}
+.a ul,.a ol{margin:0 0 10px;padding-left:22px}
+.a pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;font:13px/1.5 var(--f-mono);margin:0 0 10px}
+.a code{font-family:var(--f-mono);font-size:.92em;background:var(--bg);padding:1px 5px;border-radius:4px}
+.a pre code{background:none;padding:0}
+.final{background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-weight:600}
+.final small{display:block;font:500 11px var(--f-mono);color:var(--muted);letter-spacing:.08em;margin-bottom:4px}
+.err{color:var(--bad);font-size:14px}
+.empty{color:var(--muted);text-align:center;padding:28px 16px;border:1px dashed var(--line);border-radius:12px}
+.note{font-size:12px;color:var(--muted)}
+[hidden]{display:none!important}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand"><b>Perfect Candidate</b><span id="roleChip"></span></div>
+    <div class="nav">
+      <button class="btn small" id="homeBtn" hidden>Home</button>
+      <button class="btn small" id="themeBtn" aria-label="Toggle theme">Theme</button>
+    </div>
+  </div>
+
+  <details class="panel role" id="role">
+    <summary><b style="font-family:var(--f-display)">Role</b><span class="state" id="roleState"></span></summary>
+    <div class="body">
+      <label class="f">Job description
+        <textarea id="jd" rows="7" placeholder="Paste the full job description here"></textarea>
+      </label>
+      <label class="f">Your background (optional)
+        <textarea id="bg" rows="4" placeholder="Years of experience, past roles, projects, achievements, tools you really used"></textarea>
+        <span class="hint">Answers about experience stay true to this. Leave it empty and the candidate draws on what the JD calls for, with illustrative examples you should replace.</span>
+      </label>
+      <div class="row"><button class="btn primary" id="saveRole">Save role</button><span class="note" id="saveNote"></span></div>
+    </div>
+  </details>
+
+  <section id="home" class="view">
+    <div class="hero">
+      <h1>Walk in as the candidate the JD describes.</h1>
+      <p>Paste the job description once. Practise live interviews by voice, and get worked answers for any exam question, quiz or assignment tied to the role.</p>
+    </div>
+    <div class="doors">
+      <button class="door" data-go="interview"><span class="tag">VOICE IN, TEXT OUT</span><h2>Interview</h2><p>Speak the interviewer's question. The candidate answers in writing, in first person, ready to say aloud.</p></button>
+      <button class="door" data-go="exam"><span class="tag">PASTE A QUESTION</span><h2>Exam help</h2><p>MCQs, coding, aptitude, case and short-answer questions, with the answer first and the reasoning after.</p></button>
+    </div>
+  </section>
+
+  <section id="interview" class="view" hidden>
+    <div class="viewhead"><h2>Interview</h2></div>
+    <div class="controls">
+      <label class="f">Round
+        <select id="iRound">
+          <option value="general">General / mixed</option>
+          <option value="hr">HR and behavioural</option>
+          <option value="tech">Technical</option>
+          <option value="design">System design / case</option>
+          <option value="coding">Coding</option>
+        </select>
+      </label>
+      <label class="f">Answer length
+        <select id="iLen">
+          <option value="short">Spoken, 30 to 60 seconds</option>
+          <option value="deep">Detailed deep-dive</option>
+        </select>
+      </label>
+    </div>
+    <div class="panel mic">
+      <button class="micbtn" id="micBtn" aria-label="Start listening"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg></button>
+      <div class="qbox">
+        <div class="status" id="micStatus">Tap the mic and ask the question</div>
+        <textarea id="iq" rows="2" placeholder="The question appears here as you speak. You can also type or edit it."></textarea>
+        <div class="row">
+          <button class="btn primary" id="iAsk">Get answer</button>
+          <label class="chk"><input type="checkbox" id="autoSend" checked> Answer when I stop speaking</label>
+        </div>
+      </div>
+    </div>
+    <div class="thread" id="iThread"><div class="empty" id="iEmpty">Answers appear here. The conversation is remembered, so follow-up questions work.</div></div>
+  </section>
+
+  <section id="exam" class="view" hidden>
+    <div class="viewhead"><h2>Exam help</h2></div>
+    <div class="controls">
+      <label class="f">Question type
+        <select id="eType">
+          <option value="auto">Detect automatically</option>
+          <option value="mcq">Multiple choice</option>
+          <option value="coding">Coding problem</option>
+          <option value="aptitude">Aptitude / logic / maths</option>
+          <option value="short">Short answer</option>
+          <option value="essay">Essay / descriptive</option>
+          <option value="case">Case study / design</option>
+        </select>
+      </label>
+      <label class="f">Detail
+        <select id="eDepth">
+          <option value="brief">Answer and one-line reason</option>
+          <option value="steps" selected>Answer with step-by-step working</option>
+          <option value="teach">Teach me the concept too</option>
+        </select>
+      </label>
+    </div>
+    <label class="f">Question
+      <textarea id="eq" rows="8" placeholder="Paste the question. For multiple choice, include all the options."></textarea>
+    </label>
+    <div class="row"><button class="btn primary" id="eAsk">Solve</button><button class="btn" id="eClear">Clear</button><span class="note">You can also dictate:</span><button class="btn small" id="eMic" hidden>Dictate</button></div>
+    <div class="thread" id="eThread"><div class="empty" id="eEmpty">Your worked answer appears here.</div></div>
+  </section>
+
+  <p class="note" id="foot">Built for practice and preparation. Check answers against the real material before relying on them.</p>
+</div>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const store={get(k,d){try{return localStorage.getItem(k)??d}catch(e){return d}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+
+  /* ---------- theme ---------- */
+  $('themeBtn').onclick=()=>{
+    const r=document.documentElement,cur=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');
+    const nx=cur==='dark'?'light':'dark';r.setAttribute('data-theme',nx);store.set('pc-theme',nx);
+  };
+  const th=store.get('pc-theme',null);if(th)document.documentElement.setAttribute('data-theme',th);
+
+  /* ---------- role ---------- */
+  const jd=$('jd'),bg=$('bg');
+  jd.value=store.get('pc-jd','');bg.value=store.get('pc-bg','');
+  function roleLabel(){
+    const t=jd.value.trim();
+    if(!t){ $('roleState').textContent='Add the job description to begin'; $('roleState').className='state'; $('roleChip').textContent=''; return}
+    const first=t.split('\n').find(l=>l.trim())||'';
+    const short=first.length>54?first.slice(0,54)+'…':first;
+    $('roleState').textContent='Saved · '+short; $('roleState').className='state ok'; $('roleChip').textContent=short;
+  }
+  $('saveRole').onclick=()=>{store.set('pc-jd',jd.value);store.set('pc-bg',bg.value);roleLabel();$('saveNote').textContent='Saved';setTimeout(()=>$('saveNote').textContent='',1800);$('role').open=false};
+  roleLabel();
+  if(!jd.value.trim())$('role').open=true;
+
+  /* ---------- routing ---------- */
+  const views=['home','interview','exam'];
+  function show(){
+    let h=(location.hash||'').replace('#','');if(!views.includes(h))h='home';
+    views.forEach(v=>$(v).hidden=v!==h);$('homeBtn').hidden=h==='home';
+  }
+  addEventListener('hashchange',show);show();
+  document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.go});
+  $('homeBtn').onclick=()=>{location.hash='home'};
+
+  /* ---------- tiny markdown ---------- */
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const inl=s=>esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>');
+  function md(src){
+    const out=[];const parts=src.split(/```/);
+    parts.forEach((p,i)=>{
+      if(i%2){const body=p.replace(/^[^\n]*\n/,'');out.push('<pre><code>'+esc(body.replace(/\n$/,''))+'</code></pre>');return}
+      let list=null;
+      const flush=()=>{if(list){out.push('<'+list.t+'>'+list.i.map(x=>'<li>'+inl(x)+'</li>').join('')+'</'+list.t+'>');list=null}};
+      let para=[];const fp=()=>{if(para.length){out.push('<p>'+inl(para.join(' '))+'</p>');para=[]}};
+      p.split('\n').forEach(l=>{
+        let m;
+        if(m=l.match(/^\s*[-*•]\s+(.*)/)){fp();if(!list||list.t!=='ul'){flush();list={t:'ul',i:[]}}list.i.push(m[1])}
+        else if(m=l.match(/^\s*\d+[.)]\s+(.*)/)){fp();if(!list||list.t!=='ol'){flush();list={t:'ol',i:[]}}list.i.push(m[1])}
+        else if(!l.trim()){fp();flush()}
+        else if(m=l.match(/^#{1,4}\s+(.*)/)){fp();flush();out.push('<p><strong>'+inl(m[1])+'</strong></p>')}
+        else{flush();para.push(l.trim())}
+      });fp();flush();
+    });
+    return out.join('');
+  }
+
+  /* ---------- Claude ---------- */
+  let sample=null;
+  (async()=>{try{sample=await claude.use('sample')}catch(e){sample=null}if(!sample)$('foot').textContent='Asking Claude is not available in this view, so answers cannot be generated here. Open the page in Claude.'})();
+  const roleBlock=()=>'JOB DESCRIPTION:\n'+(jd.value.trim()||'(none provided: assume a strong generalist professional)')+'\n\nCANDIDATE BACKGROUND:\n'+(bg.value.trim()||'(none provided)');
+
+  async function run(prompt,onText){
+    if(!sample)throw {message:'Asking Claude is not available here.'};
+    return sample(prompt,{onText:({text})=>onText(text),cache:false,modelTier:'default'});
+  }
+  function errText(e){
+    if(e&&e.code==='not_granted')return 'Permission to ask Claude was declined. Reload and allow it to continue.';
+    if(e&&e.code==='rate_limited')return 'Too many requests. Wait a moment and try again.';
+    return (e&&e.message)||'Something went wrong. Try again.';
+  }
+
+  /* ---------- interview ---------- */
+  const history=[];let busyI=false;
+  const iq=$('iq'),iThread=$('iThread');
+  const roundNote={general:'a mixed interview',hr:'an HR and behavioural round: use the STAR structure for experience questions, stay warm and specific',technical:'',tech:'a technical round: be precise, state trade-offs and when you would pick each option, mention real use cases',design:'a system design or case round: clarify requirements, outline the architecture, then trade-offs and risks',coding:'a coding round: give the approach, working code, complexity and edge cases'};
+  function interviewPrompt(q){
+    const len=$('iLen').value==='short'
+      ?'Give a spoken answer of about 6 to 10 sentences (30 to 60 seconds). Plain sentences, no headings, no bullet lists unless the question asks for a list. Sound natural, confident and humble.'
+      :'Give a detailed answer with clear structure. Short paragraphs or bullets are fine. Include concrete use cases and trade-offs.';
+    const hist=history.slice(-6).map(h=>'Interviewer: '+h.q+'\nCandidate: '+h.a).join('\n\n');
+    return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. When asked about experience, use the background provided; if none is provided, give a realistic, modest example consistent with the JD. Never claim certifications, employers or numbers that the background contradicts. If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+roleBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
+  }
+  function addTurn(thread,qText,tag){
+    const t=document.createElement('div');t.className='turn';
+    t.innerHTML=(qText?'<div class="q"></div>':'')+'<div class="a"><div class="meta"><span></span><button class="btn small" hidden>Copy</button></div><div class="out">Thinking…</div></div>';
+    if(qText)t.querySelector('.q').textContent=qText;
+    t.querySelector('.meta span').textContent=tag;
+    thread.prepend(t);return t;
+  }
+  function wireCopy(t,getText){
+    const b=t.querySelector('.meta button');b.hidden=false;
+    b.onclick=async()=>{try{await navigator.clipboard.writeText(getText());b.textContent='Copied'}catch(e){b.textContent='Select text to copy'}setTimeout(()=>b.textContent='Copy',1600)};
+  }
+  async function askInterview(){
+    const q=iq.value.trim();if(!q||busyI)return;
+    busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';
+    const t=addTurn(iThread,q,'Candidate');const out=t.querySelector('.out');let last='';
+    try{
+      const r=await run(interviewPrompt(q),txt=>{last=txt;out.innerHTML=md(txt)});
+      last=r.text||last;out.innerHTML=md(last);history.push({q,a:last});wireCopy(t,()=>last);
+    }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
+    busyI=false;$('iAsk').disabled=false;
+  }
+  $('iAsk').onclick=askInterview;
+  iq.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askInterview()}});
+
+  /* ---------- dictation ---------- */
+  let dict=null,listening=false,base='',finals='';
+  const micBtn=$('micBtn'),micStatus=$('micStatus');
+  function setMic(on,msg){listening=on;micBtn.classList.toggle('on',on);micBtn.setAttribute('aria-label',on?'Stop listening':'Start listening');if(msg)micStatus.textContent=msg}
+  (async()=>{
+    try{dict=await claude.use('dictation')}catch(e){dict=null}
+    if(!dict){micBtn.disabled=true;micBtn.style.opacity=.4;micStatus.textContent='Voice input is not available in this browser. Type the question instead.';return}
+    $('eMic').hidden=false;
+    dict.onPartial(({text})=>{target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
+    dict.onFinal(({text})=>{target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals});
+    dict.onState(({state,reason})=>{
+      if(state==='listening'){setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
+      else{
+        const was=listening;setMic(false,'Tap the mic and ask the question');if(target.btn)target.btn.textContent='Dictate';
+        if(was&&target.auto&&$('autoSend').checked&&target.value.trim())askInterview();
+      }
+    });
+  })();
+  const target={value:'',base:'',finals:'',auto:true,btn:null};
+  function bindTarget(el,auto,btn){
+    target.el=el;target.auto=auto;target.btn=btn;target.base=el.value.trim();target.finals='';
+    Object.defineProperty(target,'value',{configurable:true,get(){return el.value},set(v){el.value=v}});
+  }
+  async function toggleDict(el,auto,btn){
+    if(!dict)return;
+    if(listening){try{await dict.stop()}catch(e){}return}
+    bindTarget(el,auto,btn);
+    try{await dict.start()}catch(e){
+      setMic(false,e&&e.code==='not_granted'?'Microphone access was declined. Type the question instead.':'Could not start listening. Try again.');
+    }
+  }
+  micBtn.onclick=()=>toggleDict(iq,true,null);
+  $('eMic').onclick=()=>toggleDict($('eq'),false,$('eMic'));
+
+  /* ---------- exam ---------- */
+  let busyE=false;
+  const typeNote={auto:'Work out the question type yourself.',mcq:'This is a multiple choice question.',coding:'This is a coding problem.',aptitude:'This is an aptitude, logic or maths problem.',short:'This is a short answer question.',essay:'This is an essay or descriptive question.',case:'This is a case study or design question.'};
+  const depthNote={brief:'After the final answer give a single-line reason only.',steps:'After the final answer, show step-by-step working. For multiple choice, also say briefly why each other option is wrong.',teach:'After the final answer, show step-by-step working, then explain the underlying concept in a short paragraph and name one related thing that is often asked.'};
+  async function askExam(){
+    const q=$('eq').value.trim();if(!q||busyE)return;
+    busyE=true;$('eAsk').disabled=true;$('eEmpty').hidden=true;
+    const t=addTurn($('eThread'),q.length>140?q.slice(0,140)+'…':q,'Solution');const out=t.querySelector('.out');let last='';
+    const prompt='You are an expert tutor helping a candidate practise for an exam connected to the role below. Solve the question correctly and carefully; check your work before answering. '+typeNote[$('eType').value]+' '+depthNote[$('eDepth').value]+'\n\nFormat: the very first line must be exactly "ANSWER: " followed by the final answer (for multiple choice the option letter and its text; for coding a one-line summary of the approach, with the full code after). Then the explanation. If the question is ambiguous or missing information, say what you assumed.\n\n'+roleBlock()+'\n\nQUESTION:\n'+q;
+    const render=txt=>{
+      const m=txt.match(/^\s*ANSWER:\s*(.*)\n?/i);
+      if(m){out.innerHTML='<div class="final"><small>FINAL ANSWER</small>'+inl(m[1])+'</div>'+md(txt.slice(m[0].length))}
+      else out.innerHTML=md(txt);
+    };
+    try{
+      const r=await run(prompt,txt=>{last=txt;render(txt)});
+      last=r.text||last;render(last);wireCopy(t,()=>last);
+    }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
+    busyE=false;$('eAsk').disabled=false;
+  }
+  $('eAsk').onclick=askExam;
+  $('eClear').onclick=()=>{$('eq').value='';$('eq').focus()};
+  $('eq').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askExam()}});
+})();
+</script>
