@@ -474,7 +474,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     utterStart=0;const out=t.querySelector('.out');let last='';
     try{
       const live=manual!==true&&cls!=='q';
-      const r=await runI(q,live,imgs,txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
+      const r=await runI(q,live,imgs,txt=>{if(!txt)return;last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
       picI.clear();
       last=r.text||last;liveAns='';
       if(live&&/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
@@ -868,7 +868,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   function adopt(s,cb){
     spec=null;
     return new Promise((res,rej)=>{
-      cb(s.text);s.onText=cb;
+      if(s.text)cb(s.text);s.onText=cb;
       const fin=()=>{if(s.err)rej(s.err);else res({text:s.text})};
       if(s.done)fin();else s.onDone=fin;
     });
