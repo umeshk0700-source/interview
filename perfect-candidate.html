@@ -154,6 +154,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
         <textarea id="iq" rows="2" placeholder="The question appears here as you speak. You can also type or edit it."></textarea>
         <div class="row">
           <button class="btn primary" id="iAsk">Get answer</button>
+          <button class="btn small" id="pauseBtn" aria-pressed="false">I'm answering: pause</button>
           <label class="btn small" for="iFile">Attach picture</label><input type="file" id="iFile" accept="image/*" multiple hidden>
           <label class="chk"><input type="checkbox" id="autoSend" checked> Answer the moment I finish a question</label>
         </div>
@@ -318,15 +319,21 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
 
   /* ---------- interview ---------- */
-  const history=[];let busyI=false;
+  const history=[];let busyI=false,paused=false,liveAns='';
+  const words=s=>s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').split(/\s+/).filter(Boolean);
+  /* true when the transcript mostly repeats an answer on screen, i.e. the candidate reading it aloud */
+  function echoes(t){
+    const w=words(t);if(w.length<4)return false;
+    return [...history.slice(-3).map(h=>h.a),liveAns].some(a=>{if(!a)return false;const set=new Set(words(a));return w.filter(x=>set.has(x)).length/w.length>=0.7});
+  }
   const iq=$('iq'),iThread=$('iThread');
   const roundNote={general:'a mixed interview',hr:'an HR and behavioural round: use the STAR structure for experience questions, stay warm and specific',technical:'',tech:'a technical round: be precise, state trade-offs and when you would pick each option, mention real use cases',design:'a system design or case round: clarify requirements, outline the architecture, then trade-offs and risks',coding:'a coding round: give the approach, working code, complexity and edge cases'};
-  function interviewPrompt(q){
+  function interviewPrompt(q,live){
     const len=$('iLen').value==='short'
       ?'Give a spoken answer of about 6 to 10 sentences (30 to 60 seconds). Plain sentences, no headings, no bullet lists unless the question asks for a list. Sound natural, confident and humble.'
       :'Give a detailed answer with clear structure. Short paragraphs or bullets are fine. Include concrete use cases and trade-offs.';
     const hist=history.slice(-6).map(h=>'Interviewer: '+h.q+'\nCandidate: '+h.a).join('\n\n');
-    return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. When asked about experience, use the background provided; if none is provided, give a realistic, modest example consistent with the JD. Never claim certifications, employers or numbers that the background contradicts. If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+roleBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
+    return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. When asked about experience, use the background provided; if none is provided, give a realistic, modest example consistent with the JD. Never claim certifications, employers or numbers that the background contradicts. If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+roleBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+(live?'\n\nLIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else.':'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
   }
   function addTurn(thread,qText,tag){
     const t=document.createElement('div');t.className='turn';
@@ -339,22 +346,27 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const b=t.querySelector('.meta button');b.hidden=false;
     b.onclick=async()=>{try{await navigator.clipboard.writeText(getText());b.textContent='Copied'}catch(e){b.textContent='Select text to copy'}setTimeout(()=>b.textContent='Copy',1600)};
   }
-  async function askInterview(){
+  async function askInterview(manual){
     const imgs=picI.blobs();const typed=iq.value.trim();
-    if((!typed&&!imgs.length)||busyI)return;
+    if(!typed&&!imgs.length)return;
+    if(manual!==true&&(paused||echoes(typed))){iq.value='';target.base='';target.finals='';return}
+    if(busyI)return;
     const q=typed||'(The question is in the attached picture.)';
     busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);
     const t=addTurn(iThread,q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''),'Candidate');const out=t.querySelector('.out');let last='';
     try{
-      const r=await run(interviewPrompt(q)+(imgs.length?picNote:''),txt=>{last=txt;out.innerHTML=md(txt)},imgs,'quick');
+      const live=manual!==true;
+      const r=await run(interviewPrompt(q,live)+(imgs.length?picNote:''),txt=>{last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)},imgs,'quick');
       picI.clear();
-      last=r.text||last;out.innerHTML=md(last);history.push({q,a:last});wireCopy(t,()=>last);
+      last=r.text||last;liveAns='';
+      if(live&&/^\s*\[\[IGNORE/i.test(last)){t.remove();$('iEmpty').hidden=!!iThread.querySelector('.turn');micStatus.textContent='Ignored: that was not a question for the candidate'}
+      else{t.hidden=false;out.innerHTML=md(last);history.push({q,a:last});wireCopy(t,()=>last)}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
     if(listening&&target.auto&&$('autoSend').checked&&iq.value.trim())askInterview();
   }
   $('iAsk').onclick=askInterview;
-  iq.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askInterview()}});
+  iq.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askInterview(true)}});
 
   /* ---------- dictation ---------- */
   let dict=null,listening=false,sendT=null;
@@ -364,8 +376,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     try{dict=await claude.use('dictation')}catch(e){dict=null}
     if(!dict){micBtn.disabled=true;micBtn.style.opacity=.4;micStatus.textContent='Voice input is not available in this browser. Type the question instead.';return}
     $('eMic').hidden=false;
-    dict.onPartial(({text})=>{clearTimeout(sendT);target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
-    dict.onFinal(({text})=>{target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
+    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
+    dict.onFinal(({text})=>{if(paused)return;target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
       if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(()=>{if(target.value.trim())askInterview()},700)}});
     dict.onState(({state,reason})=>{
       if(state==='listening'){setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
@@ -389,6 +401,13 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     }
   }
   micBtn.onclick=()=>toggleDict(iq,true,null);
+  $('pauseBtn').onclick=()=>{
+    paused=!paused;clearTimeout(sendT);
+    if(paused){iq.value='';target.base='';target.finals=''}
+    $('pauseBtn').textContent=paused?'Resume listening':"I'm answering: pause";
+    $('pauseBtn').setAttribute('aria-pressed',String(paused));
+    micStatus.textContent=paused?'Paused. Your own speech is ignored until you resume.':(listening?'Listening… speak the question':'Tap the mic and ask the question');
+  };
   $('eMic').onclick=()=>toggleDict($('eq'),false,$('eMic'));
 
   /* ---------- exam ---------- */
