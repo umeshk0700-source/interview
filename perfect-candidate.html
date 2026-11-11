@@ -155,7 +155,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
         <div class="row">
           <button class="btn primary" id="iAsk">Get answer</button>
           <label class="btn small" for="iFile">Attach picture</label><input type="file" id="iFile" accept="image/*" multiple hidden>
-          <label class="chk"><input type="checkbox" id="autoSend" checked> Answer when I stop speaking</label>
+          <label class="chk"><input type="checkbox" id="autoSend" checked> Answer the moment I finish a question</label>
         </div>
         <div class="thumbs" id="iThumbs"></div>
       </div>
@@ -260,9 +260,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   (async()=>{try{sample=await claude.use('sample')}catch(e){sample=null}if(!sample)$('foot').textContent='Asking Claude is not available in this view, so answers cannot be generated here. Open the page in Claude.'})();
   const roleBlock=()=>'JOB DESCRIPTION:\n'+(jd.value.trim()||'(none provided: assume a strong generalist professional)')+'\n\nCANDIDATE BACKGROUND:\n'+(bg.value.trim()||'(none provided)');
 
-  async function run(prompt,onText,images){
+  async function run(prompt,onText,images,tier){
     if(!sample)throw {message:'Asking Claude is not available here.'};
-    const opts={onText:({text})=>onText(text),cache:false,modelTier:'default'};
+    const opts={onText:({text})=>onText(text),cache:false,modelTier:tier||'default'};
     if(images&&images.length){
       let lim=null;try{lim=await sample.limits()}catch(e){}
       if(!lim||!lim.images)throw {message:'Pictures are not supported in this view. Type the question instead.'};
@@ -343,28 +343,30 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const imgs=picI.blobs();const typed=iq.value.trim();
     if((!typed&&!imgs.length)||busyI)return;
     const q=typed||'(The question is in the attached picture.)';
-    busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';
+    busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);
     const t=addTurn(iThread,q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''),'Candidate');const out=t.querySelector('.out');let last='';
     try{
-      const r=await run(interviewPrompt(q)+(imgs.length?picNote:''),txt=>{last=txt;out.innerHTML=md(txt)},imgs);
+      const r=await run(interviewPrompt(q)+(imgs.length?picNote:''),txt=>{last=txt;out.innerHTML=md(txt)},imgs,'quick');
       picI.clear();
       last=r.text||last;out.innerHTML=md(last);history.push({q,a:last});wireCopy(t,()=>last);
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
+    if(listening&&target.auto&&$('autoSend').checked&&iq.value.trim())askInterview();
   }
   $('iAsk').onclick=askInterview;
   iq.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askInterview()}});
 
   /* ---------- dictation ---------- */
-  let dict=null,listening=false,base='',finals='';
+  let dict=null,listening=false,sendT=null;
   const micBtn=$('micBtn'),micStatus=$('micStatus');
   function setMic(on,msg){listening=on;micBtn.classList.toggle('on',on);micBtn.setAttribute('aria-label',on?'Stop listening':'Start listening');if(msg)micStatus.textContent=msg}
   (async()=>{
     try{dict=await claude.use('dictation')}catch(e){dict=null}
     if(!dict){micBtn.disabled=true;micBtn.style.opacity=.4;micStatus.textContent='Voice input is not available in this browser. Type the question instead.';return}
     $('eMic').hidden=false;
-    dict.onPartial(({text})=>{target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
-    dict.onFinal(({text})=>{target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals});
+    dict.onPartial(({text})=>{clearTimeout(sendT);target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
+    dict.onFinal(({text})=>{target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
+      if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(()=>{if(target.value.trim())askInterview()},700)}});
     dict.onState(({state,reason})=>{
       if(state==='listening'){setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
       else{
