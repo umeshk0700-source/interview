@@ -448,14 +448,34 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     return [...history.slice(-3).map(h=>h.a),liveAns,spec?spec.text:''].some(a=>{if(!a)return false;const set=new Set(words(a));return w.filter(x=>set.has(x)).length/w.length>=0.85});
   }
   const iq=$('iq'),iThread=$('iThread');
-  const roundNote={general:'a mixed interview',hr:'an HR and behavioural round: use the STAR structure for experience questions, stay warm and specific',technical:'',tech:'a technical round: be precise, state trade-offs and when you would pick each option, mention real use cases',design:'a system design or case round: clarify requirements, outline the architecture, then trade-offs and risks',coding:'a coding round: give the approach, working code, complexity and edge cases'};
+  const roundNote={general:'a mixed interview',hr:'an HR and behavioural round: stay warm and specific, and use a short situation, action, result story only when asked for an example',technical:'',tech:'a technical round: be precise, state trade-offs and when you would pick each option, mention real use cases',design:'a system design or case round: clarify requirements, outline the architecture, then trade-offs and risks',coding:'a coding round: give the approach, working code, complexity and edge cases'};
   function interviewPrompt(q,live){
-    const len=$('iLen').value==='short'
-      ?'Give a spoken answer of 4 to 6 sentences (about 30 seconds). Start with the answer straight away. Plain sentences, no headings, no bullet lists unless the question asks for a list. '+HUMAN_LIVE+' '+voiceNote()
-      :'Give a detailed answer with clear structure. Short paragraphs or bullets are fine. Include concrete use cases and trade-offs. '+HUMAN+' '+voiceNote();
-    const hist=history.slice(-5).map(h=>'Interviewer: '+h.q+'\nCandidate: '+h.a.slice(0,300)).join('\n\n');
-    return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. Stick strictly to THE CANDIDATE STORY: the same companies, projects, dates, tools and numbers every time, and never contradict anything already said in CONVERSATION SO FAR. Never invent new employers, projects or numbers. Numbers, dates, team sizes, tools and project names must match the story and earlier answers exactly; when a detail is needed, reuse the one already given. Answer with complete clarity and confidence, like someone made for this role: no hedging, never say you are not sure, never describe your experience as limited. For a skill without direct evidence, give its bridge confidently and tie it to your real projects.'+rpNote()+' If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+liveBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+(live?'\n\nLIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else. Short or informal questions such as what is SQL are questions: answer them. When in doubt, answer.':'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
+    const deep=$('iLen').value!=='short';
+    const hist=history.slice(-5).map(h=>'Interviewer: '+h.q+NL+'Candidate: '+h.a.slice(0,300)).join(NL+NL);
+    const p=[
+      'You are the candidate in a live job interview, answering out loud in the first person. You fit this role completely and speak with calm, clear confidence.',
+      'ANSWER WHAT WAS ASKED, AT THE DEPTH IT WAS ASKED'+NL+
+      '- The first sentence is the direct answer. Stop as soon as the question is answered: the interviewer asks follow-ups when they want more.'+NL+
+      '- Yes or no, have you used, do you know, are you familiar with X: say yes plainly and add one short line on what you used it for. Do not name companies, projects, dates, team sizes or numbers.'+NL+
+      '- What is X, a concept, or a comparison: explain it clearly in plain words. At most one short line about your own use, without naming the project.'+NL+
+      '- How did you, tell me about, walk me through, give an example, describe a time: now tell the one most relevant project from the story: the situation, what you did, the result.'+NL+
+      '- Where, which project, which company, when, how big: give exactly that detail from the story and nothing more.'+NL+
+      '- HR and behavioural questions: a short, genuine answer, with one story only when the question asks for an example.'+NL+
+      '- Never volunteer projects, employers, dates or numbers the question did not ask for, and never list several projects when one answers it.'+NL+
+      (deep?'- Length: detailed mode, so go deeper on concepts, trade-offs and use cases, but still answer only what was asked and never pad.'
+           :'- Length: one or two sentences for yes or no and quick checks; three to five sentences for concept and experience questions; never more than about 30 seconds of speech.'),
+      'STAY CONSISTENT'+NL+
+      '- Every company, project, date, tool, team size and number you mention must match THE CANDIDATE STORY and everything already said in CONVERSATION SO FAR. Never invent new ones; when a detail is needed, reuse the one already given.'+NL+
+      '- For a skill with no direct evidence in the story, give its bridge with confidence and keep it short.'+rpNote()+NL+
+      '- Never hedge: never say you are not sure, never call your experience limited. If a question is unclear, answer the most likely reading.',
+      'HOW IT SOUNDS'+NL+HUMAN_LIVE+' '+voiceNote()+' This is '+roundNote[$('iRound').value]+'.',
+      liveBlock()+(hist?NL+NL+'CONVERSATION SO FAR:'+NL+hist:'')
+    ];
+    if(live)p.push(LIVE_NOTE);
+    p.push('Interviewer: '+q,'Candidate:');
+    return p.join(NL+NL);
   }
+  const LIVE_NOTE='LIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else. Short or informal questions such as what is SQL are questions: answer them. When in doubt, answer.';
   function addTurn(thread,qText,tag){
     const t=document.createElement('div');t.className='turn';
     t.innerHTML=(qText?'<div class="q"></div>':'')+'<div class="a"><div class="meta"><span></span><button class="btn small" hidden>Copy</button></div><div class="out">Thinking…</div></div>';
@@ -997,7 +1017,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
 
   /* ---------- human voice ---------- */
   const HUMAN='Write exactly how a real person talks in an interview, not how an AI writes. Use contractions, everyday words and some short sentences. Start by actually answering, with no filler opener, and never say Great question, Certainly, Absolutely or Sure. Sound like one specific person with opinions: say what you actually did, what went wrong, and what you would do differently. Use a natural spoken touch now and then, such as Honestly, I think, or So basically, but not in every sentence. No bullet points, no bold, no headings, no numbered lists, no em dashes, no semicolons, no neat three-part patterns, and never a closing summary that repeats the answer. Avoid words like leverage, utilize, robust, seamless, delve, crucial, holistic, passionate and synergy. Stay modest with numbers and do not over-polish. Only use a list or a code block when the question truly asks for one.';
-  function accentNote(){return $('iAccent').value==='in'?'Speaking style: natural Indian English, the way a polished professional from India speaks in an interview. Simple clear sentences, respectful and warm, using phrasing like I have worked on, so basically, what I did was, in my previous project, and actually naturally and sparingly. Do not exaggerate it, no slang caricature, no phonetic spelling, and keep it fully professional and easy to understand. Contractions are optional.':''}
+  function accentNote(){return $('iAccent').value==='in'?'Speaking style: natural Indian English, the way a polished professional from India speaks in an interview. Simple clear sentences, respectful and warm, using phrasing like I have worked on, so basically, and actually, naturally and sparingly. Do not exaggerate it, no slang caricature, no phonetic spelling, and keep it fully professional and easy to understand. Contractions are optional.':''}
   function voiceNote(){return accentNote()+' '+{natural:'Tone: relaxed and conversational, like talking to a colleague.',direct:'Tone: confident and direct, short punchy sentences, little hedging.',warm:'Tone: warm and friendly, a little story-driven.',concise:'Tone: very concise, three or four sentences at most.'}[$('iVoice').value]||''}
   const HUMAN_LIVE='Talk like a real person in an interview: plain everyday words, short sentences, answer first, no filler opener, no bullets, no bold, no em dashes, no buzzwords, no closing summary.';
   function liveBlock(){
@@ -1196,7 +1216,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     $('bankStatus').textContent='Writing '+cat[1]+'…';openCats.add(key);
     const det=$('cat-'+key);if(det)det.open=true;
     bank[key]=[];fillCat(key);
-    const prompt='You are preparing a candidate for a job interview. Category: '+cat[1]+' ('+cat[2]+'). Write 12 interview questions with model answers for this category. Cover what an interviewer could realistically ask for this exact role and level, ordered from basic to advanced. Each answer is what the candidate would actually say aloud: 3 to 6 sentences, concrete, with a short example where it helps. For coding questions put the code in a fenced code block. Use exactly this format and nothing else: a line starting with Q: and the question, then a line starting with A: and the answer, then a line containing only ### to end the pair. '+STICK+rpNote()+' '+HUMAN_LIVE+' '+accentNote()+NL+NL+roleBlock();
+    const prompt='You are preparing a candidate for a job interview. Category: '+cat[1]+' ('+cat[2]+'). Write 12 interview questions with model answers for this category. Cover what an interviewer could realistically ask for this exact role and level, ordered from basic to advanced. Each answer is what the candidate would actually say aloud, sized to the question: one or two sentences for a have you used or yes or no question, three to six for concepts and experience; name a project only when the question asks how, where or for an example. For coding questions put the code in a fenced code block. Use exactly this format and nothing else: a line starting with Q: and the question, then a line starting with A: and the answer, then a line containing only ### to end the pair. '+STICK+rpNote()+' '+HUMAN_LIVE+' '+accentNote()+NL+NL+roleBlock();
     let tick=0,ok=false;
     try{
       const r=await run(prompt,txt=>{const now=Date.now();if(now-tick<600)return;tick=now;bank[key]=parseQA(txt,false);fillCat(key)},null,'default');
