@@ -72,7 +72,9 @@ textarea{resize:vertical;min-height:90px}
 .chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted)}
 .thread{display:flex;flex-direction:column;gap:14px}
 .turn{display:grid;gap:8px}
-.q{align-self:flex-end;max-width:88%;background:var(--accent-soft);border-radius:12px 12px 2px 12px;padding:10px 14px}
+.q{font-size:13px;line-height:1.4;color:var(--muted);padding:0 4px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer;min-width:0}
+.q::before{content:'Q  ';font:600 11px var(--f-mono);color:var(--accent);letter-spacing:.06em}
+.q.open{-webkit-line-clamp:unset;display:block}
 .a{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;min-width:0}
 .a .meta{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:6px;font:500 12px var(--f-mono);color:var(--muted)}
 .a p{margin:0 0 10px}.a p:last-child{margin:0}
@@ -994,6 +996,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   function rpNote(){return rpOn()?' ROLE-PLAY MODE: this is a practice role-play. You have hands-on experience with every skill and tool in the JD; say so plainly and tie each one to a project in the story, with concrete detail, and keep every detail consistent across answers.':''}
   try{$('roleplay').checked=store.get('pc-rp','0')==='1'}catch(e){}
   $('roleplay').onchange=()=>store.set('pc-rp',$('roleplay').checked?'1':'0');
+
+  /* questions show as one quiet line so the answer stays in view; tap to see the whole question */
+  document.addEventListener('click',e=>{const q=e.target&&e.target.closest&&e.target.closest('.q');if(q)q.classList.toggle('open')});
 
   /* ---------- the fixed candidate story ---------- */
   const STICK='Stick strictly to THE CANDIDATE STORY: the same companies, projects, dates, tools and numbers, never invent new ones and never contradict it.';
