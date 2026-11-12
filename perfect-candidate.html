@@ -123,6 +123,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
 .qaans pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px;overflow-x:auto;font:13px/1.5 var(--f-mono);margin:0 0 10px}
 .qaans code{font-family:var(--f-mono);font-size:.92em;background:var(--bg);padding:1px 5px;border-radius:4px}
 .qaans pre code{background:none;padding:0}
+.panel.mic{position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+#iThread .turn{scroll-margin-top:230px}
 [hidden]{display:none!important}
 </style>
 
@@ -240,7 +242,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       </label>
       <label class="f">Answer length
         <select id="iLen">
-          <option value="short">Spoken, 30 to 60 seconds</option>
+          <option value="short">Spoken, about 30 seconds</option>
           <option value="deep">Detailed deep-dive</option>
         </select>
       </label>
@@ -264,12 +266,12 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
           <button class="btn primary" id="iAsk">Get answer</button>
           <button class="btn small" id="pauseBtn" aria-pressed="false">I'm answering: pause</button>
           <label class="btn small" for="iFile">Attach picture</label><input type="file" id="iFile" accept="image/*" multiple hidden>
-          <label class="chk"><input type="checkbox" id="autoSend" checked> Answer the moment I finish a question</label>
+          <details style="width:100%"><summary class="note" style="cursor:pointer">Mic options</summary><div class="row"><label class="chk"><input type="checkbox" id="autoSend" checked> Answer the moment I finish a question</label>
           <label class="chk"><input type="checkbox" id="keepOn" checked> Continuous mic (keep listening)</label>
-          <label class="chk"><input type="checkbox" id="earlyOn" checked> Start answering while I ask</label>
+          <label class="chk"><input type="checkbox" id="earlyOn" checked> Start answering while I ask</label></div></details>
         </div>
         <div class="thumbs" id="iThumbs"></div>
-        <div class="note">Continuous mode keeps listening until you tap the mic. Hold Space while you speak and everything you say is ignored.</div>
+        <div class="note">Continuous mode keeps listening until you tap the mic. Hold Shift while you speak and everything you say is ignored.</div>
       </div>
     </div>
     <details class="panel qd" id="qWrap" hidden><summary>Likely questions for this role</summary><div class="chips" id="qChips"></div></details>
@@ -437,8 +439,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   const words=s=>s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,' ').split(/\s+/).filter(Boolean);
   /* true when the transcript mostly repeats an answer on screen, i.e. the candidate reading it aloud */
   function echoes(t){
-    const w=words(t);if(w.length<4)return false;
-    return [...history.slice(-3).map(h=>h.a),liveAns].some(a=>{if(!a)return false;const set=new Set(words(a));return w.filter(x=>set.has(x)).length/w.length>=0.7});
+    if(classify(t)==='q')return false;const w=words(t);if(w.length<8)return false;
+    return [...history.slice(-3).map(h=>h.a),liveAns,spec?spec.text:''].some(a=>{if(!a)return false;const set=new Set(words(a));return w.filter(x=>set.has(x)).length/w.length>=0.85});
   }
   const iq=$('iq'),iThread=$('iThread');
   const roundNote={general:'a mixed interview',hr:'an HR and behavioural round: use the STAR structure for experience questions, stay warm and specific',technical:'',tech:'a technical round: be precise, state trade-offs and when you would pick each option, mention real use cases',design:'a system design or case round: clarify requirements, outline the architecture, then trade-offs and risks',coding:'a coding round: give the approach, working code, complexity and edge cases'};
@@ -454,7 +456,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     t.innerHTML=(qText?'<div class="q"></div>':'')+'<div class="a"><div class="meta"><span></span><button class="btn small" hidden>Copy</button></div><div class="out">Thinking…</div></div>';
     if(qText)t.querySelector('.q').textContent=qText;
     t.querySelector('.meta span').textContent=tag;
-    thread.prepend(t);return t;
+    thread.prepend(t);try{t.scrollIntoView({block:'start',behavior:'smooth'})}catch(e){}return t;
   }
   function wireCopy(t,getText){
     const b=t.querySelector('.meta button');b.hidden=false;
@@ -474,10 +476,10 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     utterStart=0;const out=t.querySelector('.out');let last='';
     try{
       const live=manual!==true&&cls!=='q';
-      const r=await runI(q,live,imgs,txt=>{if(!txt)return;last=txt;liveAns=txt;t.hidden=live&&/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
+      const r=await runI(q,live,imgs,txt=>{if(!txt)return;last=txt;liveAns=txt;t.hidden=/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
       picI.clear();
       last=r.text||last;liveAns='';
-      if(live&&/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
+      if(/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
       else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);lastTurn={q,t,h,endAt};t.querySelector('.meta span').textContent='Candidate · ready '+Math.max(0,(Date.now()-endAt)/1000).toFixed(1)+'s after you finished';ansUntil=Date.now()+Math.min(90000,Math.max(8000,words(last).length/2.4*1000));wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
@@ -492,7 +494,19 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   function setMic(on,msg){listening=on;micBtn.classList.toggle('on',on);micBtn.setAttribute('aria-label',on?'Stop listening':'Start listening');if(msg)micStatus.textContent=msg}
   (async()=>{
     try{dict=await claude.use('dictation')}catch(e){dict=null}
-    if(!dict){micBtn.disabled=true;micBtn.style.opacity=.4;micStatus.textContent='Voice input is not available in this browser. Type the question instead.';return}
+    if(!dict){
+      /* no built-in voice here (Safari, phone apps): the keyboard mic types into the box, and the page treats pauses in that text like pauses in speech */
+      micBtn.disabled=true;micBtn.style.opacity=.4;
+      micStatus.textContent='Built-in voice is not available here. Tap the box and use your keyboard mic: answers start automatically as you speak.';
+      bindTarget(iq,true,null);
+      iq.addEventListener('input',()=>{
+        if(!$('autoSend').checked)return;
+        clearTimeout(sendT);if(!utterStart)utterStart=Date.now();lastFinalAt=Date.now();
+        maybeSpec();
+        sendT=setTimeout(()=>{if(iq.value.trim())askInterview()},1800);
+      });
+      return;
+    }
     $('eMic').hidden=false;$('mMic').hidden=false;
     dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(!utterStart)utterStart=Date.now();if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);maybeSpec();target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
     dict.onFinal(({text})=>{if(paused)return;lastFinalAt=Date.now();if(!utterStart)utterStart=Date.now();target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
@@ -503,7 +517,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
         const was=listening;clearTimeout(sendT);setMic(false,'Tap the mic and ask the question');if(target.btn)target.btn.textContent='Dictate';
         if(was&&target.auto&&$('autoSend').checked&&target.value.trim())askInterview();
         if(was&&target.auto&&$('keepOn').checked&&!userStop&&reason!=='viewer_stopped'&&reason!=='hidden'){
-          setTimeout(()=>{if(!listening&&!userStop&&dict){bindTarget(target.el,true,null);dict.start().catch(()=>{micStatus.textContent='Mic stopped. Tap the mic to resume.'})}},300);
+          setTimeout(()=>{if(!listening&&!userStop&&dict){bindTarget(target.el,true,null);dict.start().catch(()=>{needResume=true;micStatus.textContent='Mic stopped by the browser. Tap anywhere to resume listening.'})}},300);
         }
       }
     });
@@ -523,7 +537,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(!dict)return;
     if(listening){userStop=true;try{await dict.stop()}catch(e){}return}
     userStop=false;bindTarget(el,auto,btn);
-    try{await dict.start();clearTimeout(sendT);if(auto)sendT=setTimeout(()=>{if(listening&&!el.value.trim()&&dict)dict.stop().catch(()=>{})},10000)}catch(e){
+    try{await dict.start();clearTimeout(sendT);if(auto&&!$('keepOn').checked)sendT=setTimeout(()=>{if(listening&&!el.value.trim()&&dict)dict.stop().catch(()=>{})},10000)}catch(e){
       setMic(false,e&&e.code==='not_granted'?'Microphone access was declined. Type the question instead.':'Could not start listening. Try again.');
     }
   }
@@ -775,6 +789,14 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
   };
 
+  /* ---------- resume the mic on the next tap when the browser ends a session ---------- */
+  let needResume=false;
+  addEventListener('pointerdown',()=>{
+    if(!needResume||listening||!dict||(location.hash||'')!=='#interview')return;
+    needResume=false;userStop=false;bindTarget(iq,true,null);
+    dict.start().catch(()=>{needResume=true});
+  },true);
+
   /* ---------- human voice ---------- */
   const HUMAN='Write exactly how a real person talks in an interview, not how an AI writes. Use contractions, everyday words and some short sentences. Start by actually answering, with no filler opener, and never say Great question, Certainly, Absolutely or Sure. Sound like one specific person with opinions: say what you actually did, what went wrong, and what you would do differently. Use a natural spoken touch now and then, such as Honestly, I think, or So basically, but not in every sentence. No bullet points, no bold, no headings, no numbered lists, no em dashes, no semicolons, no neat three-part patterns, and never a closing summary that repeats the answer. Avoid words like leverage, utilize, robust, seamless, delve, crucial, holistic, passionate and synergy. Stay modest with numbers and do not over-polish. Only use a list or a code block when the question truly asks for one.';
   function accentNote(){return $('iAccent').value==='in'?'Speaking style: natural Indian English, the way a polished professional from India speaks in an interview. Simple clear sentences, respectful and warm, using phrasing like I have worked on, so basically, what I did was, in my previous project, and actually naturally and sparingly. Do not exaggerate it, no slang caricature, no phonetic spelling, and keep it fully professional and easy to understand. Contractions are optional.':''}
@@ -796,11 +818,15 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   let spec=null,specT=null,specOff=0,draftCard=null,lastSpecAt=0,lastTurn=null,lastFinalAt=0,utterStart=0,specDirty=false;
   /* a question spoken in pieces: a piece that starts within 5s of the last one is merged into the same question and the same answer card */
   const MERGE_MS=5000;
+  const CONT=/^(and|also|plus|but|or|then|with|as well|including|specifically|in particular|for example|like|especially|along with|because|so that)( |$)/;
   const NEWQ=/^(next question|next one|moving on|move on|another question|let s move|lets move|okay now|ok now|now let s|now lets|my next question|second question|one more)/;
   const norm=t=>t.toLowerCase().replace(/[^a-z0-9? ]/g,' ').replace(/ +/g,' ').trim();
   function mergeTarget(typed){
     if(!lastTurn||!utterStart||picI.blobs().length)return null;
-    if(utterStart-lastTurn.endAt>MERGE_MS||NEWQ.test(norm(typed)))return null;
+    const s=norm(typed);
+    if(utterStart-lastTurn.endAt>MERGE_MS||NEWQ.test(s))return null;
+    /* a piece that opens like its own question is a new question; one that opens with a joining word, or is a fragment, continues the last one */
+    if(!CONT.test(s)&&QSTART.test(s))return null;
     return lastTurn;
   }
   function setBubble(t,qt){let b=t.querySelector('.q');if(!b){b=document.createElement('div');b.className='q';t.prepend(b)}b.textContent=qt}
@@ -815,7 +841,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const sy=new Set(y);return x.filter(w=>sy.has(w)).length/Math.max(x.length,y.length)>=0.85;
   }
   function stopSpec(){clearTimeout(specT);specT=null;if(spec){try{spec.ctrl.abort()}catch(e){}spec=null}}
-  function startSpec(q,sm){
+  function startSpec(q,sm,live){
     stopSpec();
     const ctrl=new AbortController();
     lastSpecAt=Date.now();$('iEmpty').hidden=true;
@@ -825,10 +851,10 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const card=draftCard;{const o0=card.querySelector('.out');if(o0.textContent==='Thinking…')o0.textContent='Listening to the question…'}
     const s={q,ctrl,text:'',done:false,err:null,onText:null,onDone:null,t0:Date.now()};
     spec=s;
-    run(interviewPrompt(q,false),txt=>{s.text=txt;if(s.onText)s.onText(txt);else if(draftCard===card)card.querySelector('.out').innerHTML=md(txt)},null,'quick',ctrl.signal)
+    run(interviewPrompt(q,!!live),txt=>{s.text=txt;if(s.onText)s.onText(txt);else if(draftCard===card&&!/^\s*\[\[/.test(txt))card.querySelector('.out').innerHTML=md(txt)},null,'quick',ctrl.signal)
       .then(r=>{s.text=r.text||s.text})
       .catch(e=>{s.err=e;if(e&&e.code==='rate_limited')specOff=Date.now()+30000})
-      .then(()=>{s.done=true;if(!s.err&&draftCard===card)card.querySelector('.meta span').textContent='Draft, updating as you speak · '+((Date.now()-s.t0)/1000).toFixed(1)+'s per update';if(s.onDone)s.onDone();if(specDirty&&spec===s){specDirty=false;maybeSpec()}});
+      .then(()=>{s.done=true;if(!s.onText&&draftCard===card&&/^\s*\[\[IGNORE/i.test(s.text))discardDraft();if(!s.err&&draftCard===card)card.querySelector('.meta span').textContent='Draft, updating as you speak · '+((Date.now()-s.t0)/1000).toFixed(1)+'s per update';if(s.onDone)s.onDone();if(specDirty&&spec===s){specDirty=false;maybeSpec()}});
   }
   function maybeSpec(){
     /* throttled, not debounced: keeps drafting while the question is still being spoken; one draft at a time, never aborted mid-stream */
@@ -842,7 +868,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
       if(spec&&sameQ(spec.q,fq))return;
       if(spec&&!spec.done){specDirty=true;return}
-      specDirty=false;startSpec(fq,sm);
+      specDirty=false;startSpec(fq,sm,c!=='q');
     },Math.max(250,1800-(Date.now()-lastSpecAt)));
   }
   function kickFinal(){
@@ -853,17 +879,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
     if(spec&&sameQ(spec.q,fq))return;
     clearTimeout(specT);specT=null;specDirty=false;
-    startSpec(fq,sm);
-  }
-  function maybeSpecOld(){
-    clearTimeout(specT);
-    if(!target.auto||!$('autoSend').checked||!$('earlyOn').checked||paused||busyI||Date.now()<specOff)return;
-    specT=setTimeout(()=>{
-      const q=target.value.trim();
-      if(words(q).length<4||classify(q)!=='q'||echoes(q))return;
-      const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;if(spec&&sameQ(spec.q,fq))return;
-      startSpec(fq,sm);
-    },Math.max(700,2500-(Date.now()-lastSpecAt)));
+    startSpec(fq,sm,c!=='q');
   }
   function adopt(s,cb){
     spec=null;
@@ -884,28 +900,29 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   let ansUntil=0,holdT=null,pausedByHold=false;
   const QSTART=/^(so |and |okay |ok |now |next |alright |great |right |um |uh |well )*(what|why|how|when|where|which|who|can you|could you|would you|will you|do you|did you|have you|are you|is there|is it|tell me|walk me|explain|describe|define|give me|share|talk me|compare|suppose|imagine|consider|any questions|let s|lets)/i;
   const ASK=/^(so |and |okay |ok |now )*(i would like you|i d like you|i want you|i wanna know|i was wondering|i would love to hear|i d love to hear|i d like to know|i would like to know|i d like to hear)/i;
-  const CANDSTART=/^(so |and |um |uh |well |yeah |yes |okay )*(i |i m |i ve |we |my |in my |at my |when i |for me |honestly|basically|that is a good question|great question|good question|thank you|thanks)/i;
+  const CANDSTART=/^(so |and |um |uh |well |yeah |yes |okay )*(i |i m |i ve |in my |at my |when i |honestly|basically)/i;
   const NARR=/^(what|how|why|when|where) (i|we|my) /i;
+  const QANY=/ (what|why|how|which|can you|could you|would you|do you|did you|have you|are you|tell me|walk me|explain|describe|give me an example) /;
   function classify(t){
     const s=t.trim().toLowerCase().replace(/[^a-z0-9? ]/g,' ').replace(/ +/g,' ').trim();
     if(!s)return '';
     const inWindow=Date.now()<ansUntil;
     if(ASK.test(s))return 'q';
     if(NARR.test(s))return inWindow?'cand':'?';
-    const hasQ=t.indexOf('?')>=0||QSTART.test(s),cand=CANDSTART.test(s);
+    const hasQ=t.indexOf('?')>=0||QSTART.test(s)||QANY.test(' '+s+' '),cand=CANDSTART.test(s);
     if(hasQ&&!cand)return 'q';
     if(cand&&!hasQ)return 'cand';
     return inWindow?'cand':'?';
   }
   addEventListener('keydown',e=>{
-    if(e.code!=='Space'||e.repeat||(location.hash||'')!=='#interview')return;
+    if(!(e.code==='ShiftLeft'||e.code==='ShiftRight')||e.repeat||(location.hash||'')!=='#interview')return;
     const tag=((e.target&&e.target.tagName)||'').toLowerCase();
     if(tag==='input'||tag==='textarea'||tag==='select'||tag==='button')return;
     e.preventDefault();clearTimeout(holdT);
-    if(!paused){paused=true;pausedByHold=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);micStatus.textContent='Holding Space: your speech is ignored'}
+    if(!paused){paused=true;pausedByHold=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);micStatus.textContent='Holding Shift: your speech is ignored'}
   });
   addEventListener('keyup',e=>{
-    if(e.code!=='Space'||!pausedByHold)return;
+    if(!(e.code==='ShiftLeft'||e.code==='ShiftRight')||!pausedByHold)return;
     holdT=setTimeout(()=>{paused=false;pausedByHold=false;micStatus.textContent=listening?'Listening… speak the question':'Tap the mic and ask the question'},1200);
   });
 
