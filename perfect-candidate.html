@@ -500,15 +500,15 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);
     const t=takeDraft(q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''),mrg&&mrg.t);
     if(mrg){t.querySelectorAll('.refine,.chips').forEach(x=>x.remove());const ix=history.indexOf(mrg.h);if(ix>=0)history.splice(ix,1)}
-    dlog('ask',{q:q.slice(0,200),cls,merged:!!mrg,manual:manual===true,adopt:!!(spec&&sameQ(spec.q,q))});if(manual!==true)consumed=(consumed?consumed+' ':'')+typed;utterStart=0;const out=t.querySelector('.out');let last='';
+    dlog('ask',{q:q.slice(0,200),cls,merged:!!mrg,manual:manual===true,adopt:!!(spec&&coversQ(spec.q,q))});if(manual!==true)consumed=(consumed?consumed+' ':'')+typed;utterStart=0;const out=t.querySelector('.out');let last='';
     try{
       const live=manual!==true&&cls!=='q';
-      const r=await runI(q,live,imgs,txt=>{if(!txt)return;last=txt;liveAns=txt;t.hidden=/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
+      const r=await runI(q,live,imgs,txt=>{if(!txt)return;last=txt;liveAns=txt;t.hidden=/^\s*\[\[/.test(txt);if(!t.hidden){out.parentNode.hidden=false;out.innerHTML=md(txt)}});
       picI.clear();
       last=r.text||last;liveAns='';
-      if(/^\s*\[\[IGNORE/i.test(last)){dlog('ignored',{q:q.slice(0,200)});t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
-      else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);lastTurn={q,t,h,endAt};dlog('answered',{afterEndMs:Date.now()-endAt,len:last.length});noteClaims(q,last);t.querySelector('.meta span').textContent='Candidate · ready '+Math.max(0,(Date.now()-endAt)/1000).toFixed(1)+'s after you finished';ansUntil=Date.now()+Math.min(90000,Math.max(8000,words(last).length/2.4*1000));wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
-    }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
+      if(/^\s*\[\[IGNORE/i.test(last)){dlog('ignored',{q:q.slice(0,200)});t.hidden=false;out.parentNode.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
+      else{t.hidden=false;out.parentNode.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);lastTurn={q,t,h,endAt};dlog('answered',{afterEndMs:Date.now()-endAt,len:last.length});noteClaims(q,last);t.querySelector('.meta span').textContent='Candidate · ready '+Math.max(0,(Date.now()-endAt)/1000).toFixed(1)+'s after you finished';ansUntil=Date.now()+Math.min(90000,Math.max(8000,words(last).length/2.4*1000));wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
+    }catch(e){out.parentNode.hidden=false;out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
     if(listening&&target.auto&&$('autoSend').checked&&iq.value.trim())askInterview();
   }
@@ -885,9 +885,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const q=cleanQ(target.value);if(isFiller(q)||words(q).length<2||classify(q)==='cand')return;
     const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
     if(!draftCard){
-      draftCard=sm?sm.t:addTurn(iThread,fq,'Draft, updating as you speak');
-      draftCard.querySelector('.meta span').textContent='Draft, updating as you speak';
-      const o=draftCard.querySelector('.out');if(o.textContent==='Thinking…')o.textContent='Listening to the question…';
+      draftCard=sm?sm.t:addTurn(iThread,fq,'Draft');
+      draftCard.querySelector('.meta span').textContent='Draft';
+      const o=draftCard.querySelector('.out');if(o.textContent==='Thinking…'){o.textContent='';draftCard.querySelector('.a').hidden=true}
       $('iEmpty').hidden=true;
     }
     setBubble(draftCard,fq);
@@ -1059,6 +1059,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     return addTurn(iThread,qt,'Candidate');
   }
   function discardDraft(){if(draftCard){draftCard.remove();draftCard=null;$('iEmpty').hidden=!!iThread.querySelector('.turn')}}
+  /* a draft is only reused as the final answer when it was written for every word of the finished question */
+  function coversQ(a,b){const x=new Set(words(a)),y=words(b);return y.length>0&&y.every(w=>x.has(w))}
   function sameQ(a,b){
     const x=words(a),y=words(b);if(!x.length||!y.length)return false;
     const sy=new Set(y);return x.filter(w=>sy.has(w)).length/Math.max(x.length,y.length)>=0.85;
@@ -1069,15 +1071,15 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const ctrl=new AbortController();
     lastSpecAt=Date.now();$('iEmpty').hidden=true;
     if(!draftCard&&sm)draftCard=sm.t;
-    if(!draftCard){draftCard=addTurn(iThread,q,'Draft, updating as you speak')}
-    else{setBubble(draftCard,q);draftCard.querySelector('.meta span').textContent='Draft, updating as you speak'}
-    const card=draftCard;{const o0=card.querySelector('.out');if(o0.textContent==='Thinking…')o0.textContent='Listening to the question…'}
+    if(!draftCard){draftCard=addTurn(iThread,q,'Draft')}
+    else{setBubble(draftCard,q);draftCard.querySelector('.meta span').textContent='Draft'}
+    const card=draftCard;{const o0=card.querySelector('.out');if(o0.textContent==='Thinking…'){o0.textContent='';card.querySelector('.a').hidden=true}}
     dlog('draft',{q:q.slice(0,200),live:!!live});const s={q,ctrl,text:'',done:false,err:null,onText:null,onDone:null,t0:Date.now()};
     spec=s;
-    run(interviewPrompt(q,!!live),txt=>{s.text=txt;if(s.onText)s.onText(txt);else if(draftCard===card&&!/^\s*\[\[/.test(txt))card.querySelector('.out').innerHTML=md(txt)},null,'quick',ctrl.signal)
+    run(interviewPrompt(q,!!live),txt=>{s.text=txt;if(s.onText)s.onText(txt);else if(draftCard===card&&!/^\s*\[\[/.test(txt)){card.querySelector('.a').hidden=false;card.querySelector('.out').innerHTML=md(txt)}},null,'quick',ctrl.signal)
       .then(r=>{s.text=r.text||s.text})
       .catch(e=>{s.err=e;if(e&&e.code==='rate_limited')specOff=Date.now()+30000})
-      .then(()=>{s.done=true;dlog('draftDone',{ms:Date.now()-s.t0,err:s.err?String(s.err.code||s.err.message||'err'):'',aborted:s.ctrl.signal.aborted});if(!s.onText&&draftCard===card&&/^\s*\[\[IGNORE/i.test(s.text))discardDraft();if(!s.err&&draftCard===card)card.querySelector('.meta span').textContent='Draft, updating as you speak · '+((Date.now()-s.t0)/1000).toFixed(1)+'s per update';if(s.onDone)s.onDone();if(specDirty&&spec===s){specDirty=false;maybeSpec()}});
+      .then(()=>{s.done=true;dlog('draftDone',{ms:Date.now()-s.t0,err:s.err?String(s.err.code||s.err.message||'err'):'',aborted:s.ctrl.signal.aborted});if(!s.onText&&draftCard===card&&/^\s*\[\[IGNORE/i.test(s.text))discardDraft();if(!s.err&&draftCard===card)card.querySelector('.meta span').textContent='Draft · '+((Date.now()-s.t0)/1000).toFixed(1)+'s';if(s.onDone)s.onDone();if(specDirty&&spec===s){specDirty=false;maybeSpec()}});
   }
   function maybeSpec(){
     /* throttled, not debounced: keeps drafting while the question is still being spoken; one draft at a time, never aborted mid-stream */
@@ -1100,7 +1102,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const q=cleanQ(target.value);if(words(q).length<3||isFiller(q))return;
     const c=classify(q);if(c==='cand'||echoes(q))return;
     const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
-    if(spec&&sameQ(spec.q,fq))return;
+    if(spec&&coversQ(spec.q,fq))return;
     clearTimeout(specT);specT=null;specDirty=false;
     startSpec(fq,sm,c!=='q');
   }
@@ -1113,7 +1115,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     });
   }
   function runI(q,live,imgs,cb){
-    if(!imgs.length&&spec&&sameQ(spec.q,q))return adopt(spec,cb);
+    if(!imgs.length&&spec&&coversQ(spec.q,q))return adopt(spec,cb);
     stopSpec();
     return run(interviewPrompt(q,live)+(imgs.length?picNote:''),cb,imgs,'quick');
   }
