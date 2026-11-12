@@ -466,10 +466,10 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     b.onclick=async()=>{try{await navigator.clipboard.writeText(humanize(getText()));b.textContent='Copied'}catch(e){b.textContent='Select text to copy'}setTimeout(()=>b.textContent='Copy',1600)};
   }
   async function askInterview(manual){
-    const imgs=picI.blobs();const typed=iq.value.trim();
+    const imgs=picI.blobs();const typed=cleanQ(iq.value);
     if(!typed&&!imgs.length)return;
     const cls=manual===true?'q':classify(typed);
-    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){dlog('skip',{text:typed.slice(0,200),why:paused?'paused':cls==='cand'?'candidate':'echo'});consumed=(consumed?consumed+' ':'')+typed;stopSpec();discardDraft();utterStart=0;iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
+    if(manual!==true&&(paused||cls==='cand'||isFiller(typed)||echoes(typed))){dlog('skip',{text:typed.slice(0,200),why:paused?'paused':cls==='cand'?'candidate':isFiller(typed)?'filler':'echo'});consumed=(consumed?consumed+' ':'')+typed;stopSpec();discardDraft();utterStart=0;iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
     if(busyI)return;
     const mrg=manual!==true?mergeTarget(typed):null;const endAt=lastFinalAt;
     const q=mrg?mrg.q+' '+typed:(typed||'(The question is in the attached picture.)');
@@ -511,11 +511,16 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       return;
     }
     $('eMic').hidden=false;$('mMic').hidden=false;
-    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(!utterStart)utterStart=Date.now();if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);maybeSpec();target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+livePart(text);liveBubble();dbg('heard',text);dlogP(text)});
+    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(!utterStart)utterStart=Date.now();if(String(text).trim())lastFinalAt=Date.now();if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,1700);maybeSpec();target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+livePart(text);liveBubble();dbg('heard',text);dlogP(text);
+      /* the engine punctuates: a partial ending in a question mark means the question is complete, so draft and send without waiting for a final */
+      if(String(text).trim().slice(-1)==='?'&&target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,900);kickFinal()}});
     dict.onFinal(({text})=>{if(paused)return;lastFinalAt=Date.now();if(!utterStart)utterStart=Date.now();dbg('final',text);dlog('final',{text:String(text).slice(0,200)});target.finals=joinFinal(target.finals,stripConsumed(text));target.value=(target.base?target.base+' ':'')+target.finals;
       if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,classify(target.value)==='q'?1500:2200);kickFinal()}});
     dict.onState(({state,reason})=>{dlog('mic',{state,reason:reason||''});
-      if(state==='listening'){consumed='';setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
+      if(state==='starting'){starting=true;micBtn.classList.add('on');micStatus.textContent='Starting the mic… wait for Listening before you speak';return}
+      if(state==='finishing'){micStatus.textContent='Finishing…';return}
+      starting=false;
+      if(state==='listening'){heardAny=false;clearTimeout(silHint);silHint=setTimeout(()=>{if(listening&&!heardAny)micStatus.textContent='Not hearing anything yet. Check which microphone Chrome is using: click the mic icon in the address bar.'},8000);consumed='';setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
       else{
         const was=listening;clearTimeout(sendT);setMic(false,'Tap the mic and ask the question');if(target.btn)target.btn.textContent='Dictate';
         if(was&&target.auto&&$('autoSend').checked&&target.value.trim())askInterview();
@@ -538,7 +543,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   async function toggleDict(el,auto,btn){
     if(!dict)return;
-    if(listening){userStop=true;try{await dict.stop()}catch(e){}return}
+    if(listening||starting){userStop=true;try{await dict.stop()}catch(e){}return}
     userStop=false;bindTarget(el,auto,btn);
     try{await dict.start();clearTimeout(sendT);if(auto&&!$('keepOn').checked)sendT=setTimeout(()=>{if(listening&&!el.value.trim()&&dict)dict.stop().catch(()=>{})},10000)}catch(e){
       setMic(false,e&&e.code==='not_granted'?'Microphone access was declined. Type the question instead.':'Could not start listening. Try again.');
@@ -804,6 +809,16 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   /* Some voice engines resend the whole session, or the whole phrase so far, with every update. Text already handled is stripped off the front. */
   let consumed='';const dbgState={};
   const wn=w=>w.toLowerCase().replace(/[^a-z0-9]/g,'');
+  /* pleasantries and filler said on their own are never questions */
+  const FILLER=/^(thank you|thanks|okay|ok|right|yes|yeah|no|hmm|sure|great|good|nice|alright|fine|cool|got it|i see)( (so|then|thank you|thanks|sir|madam))?[.!?, ]*$/i;
+  function isFiller(t){const s=String(t||'').trim();return !s||(words(s).length<=4&&FILLER.test(s))}
+  /* drop trailing filler such as Okay or Thank you after a question, so the draft still matches */
+  const TAIL=/^(.*?)[ ,.]+(okay|ok|right|yeah|yes|so|um|uh|thank you|thanks|alright)[.!?, ]*$/i;
+  function cleanQ(t){
+    let s=String(t||'').trim(),p;
+    do{p=s;const m=s.match(TAIL);if(m&&words(m[1]).length>=3)s=m[1].trim()}while(s!==p);
+    return s;
+  }
   function dropPrefix(t,p){
     const a=String(t).trim().split(' ').filter(Boolean),b=String(p||'').trim().split(' ').filter(Boolean);
     if(!b.length||a.length<b.length)return t;
@@ -820,7 +835,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   /* show the question in its card the moment it is heard, before any answer text exists */
   function liveBubble(){
     if(!$('earlyOn').checked||paused||!target.auto)return;
-    const q=target.value.trim();if(words(q).length<2||classify(q)==='cand')return;
+    const q=cleanQ(target.value);if(isFiller(q)||words(q).length<2||classify(q)==='cand')return;
     const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
     if(!draftCard){
       draftCard=sm?sm.t:addTurn(iThread,fq,'Draft, updating as you speak');
@@ -838,12 +853,12 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
 
   /* ---------- diagnostics: a log of each visit, saved to this artifact so Claude can read it and fix problems ---------- */
   const diag={id:'d'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),t0:Date.now(),ev:[],dirty:false,writing:false};
-  let lastP=0;
+  let lastP=0,starting=false,heardAny=false,silHint=null;
   function dlog(type,data){
     try{if(!$('diagOn').checked||diag.ev.length>=700)return}catch(e){return}
     diag.ev.push(Object.assign({t:Date.now()-diag.t0,type},data||{}));diag.dirty=true;
   }
-  function dlogP(t){const n=Date.now();if(n-lastP<1000)return;lastP=n;dlog('partial',{text:String(t).slice(0,200)})}
+  function dlogP(t){if(String(t).trim())heardAny=true;const n=Date.now();if(n-lastP<1000)return;lastP=n;dlog('partial',{text:String(t).slice(0,200)})}
   async function dflush(){
     if(!db||!diag.dirty||diag.writing)return;
     diag.writing=true;diag.dirty=false;
@@ -924,8 +939,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     specT=setTimeout(()=>{
       specT=null;
       if(paused||busyI)return;
-      const q=target.value.trim();
-      if(words(q).length<3)return;
+      const q=cleanQ(target.value);
+      if(words(q).length<3||isFiller(q))return;
       const c=classify(q);if(c==='cand'||echoes(q))return;
       const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
       if(spec&&sameQ(spec.q,fq))return;
@@ -936,7 +951,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   function kickFinal(){
     /* a phrase just finished: draft against the full text right away instead of waiting for the pause that confirms the end */
     if(!target.auto||!$('autoSend').checked||!$('earlyOn').checked||paused||busyI||Date.now()<specOff)return;
-    const q=target.value.trim();if(words(q).length<3)return;
+    const q=cleanQ(target.value);if(words(q).length<3||isFiller(q))return;
     const c=classify(q);if(c==='cand'||echoes(q))return;
     const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
     if(spec&&sameQ(spec.q,fq))return;
