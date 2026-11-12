@@ -146,8 +146,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       <label class="f">Company (optional)
         <input type="text" id="company" placeholder="Company name, used in letters and questions to ask">
       </label>
-      <div class="row"><label class="btn primary small" for="resumeFile">Attach resume</label><input type="file" id="resumeFile" accept=".pdf,.docx,.txt,.md,.rtf,image/*" hidden><span class="note" id="resumeNote">PDF, Word (.docx), text, or a photo or screenshot of it</span></div>
-      <label class="f">Your resume
+      <div class="row"><label class="btn primary small" for="resumeFile">Attach resume</label><input type="file" id="resumeFile" accept=".pdf,.docx,.txt,.md,.rtf,image/*" hidden><span class="note" id="resumeNote">PDF, Word (.docx), or a photo or screenshot of it. Your story is built from it.</span></div>
+      <label class="f" id="bgWrap" hidden>Your resume
         <textarea id="bg" rows="4" placeholder="Paste your full resume: roles, companies, dates, projects, tools and results"></textarea>
         <span class="hint">Your story is built from this, and every answer sticks to it.</span>
       </label>
@@ -624,7 +624,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   $('buildProfile').onclick=async()=>{
     if(!jd.value.trim()){$('profNote').textContent='Add the job description first.';return}
-    if(!bg.value.trim()){$('profNote').textContent='Paste your resume first. The story is built only from it.';return}
+    if(!bg.value.trim()){$('profNote').textContent='Attach your resume first. The story is built only from it.';return}
     store.set('pc-jd',jd.value);store.set('pc-bg',bg.value);roleLabel();
     const btn=$('buildProfile');btn.disabled=true;$('profNote').textContent='Building the profile…';
     const prompt='You are building the single fixed story a candidate will tell in every interview answer for the job below. Work only from the resume. Return only a JSON object with these keys: pitch (4 to 5 confident first-person sentences answering Tell me about yourself, tuned to this JD), projects (array of objects with keys name, company, from, to, role, team (a number), stack (array of tool names), did (one sentence) and results (array of measurable outcomes): every project on the resume, each dated inside the role at that company), facts (array of 10 to 16 short fixed fact lines the candidate will always repeat exactly: roles with company names and dates, total years of experience, team sizes, main projects with their stack and measurable results, all taken from the resume), stories (array of 3 to 4 objects with string keys title, situation, action, result, where title is exactly a project name from projects: the strongest resume projects told so they prove the JD requirements, keeping every number from the resume), skillMap (array of objects with string keys skill and evidence: for every skill or tool in the JD that the resume supports, the project name from projects where it was used and how), bridges (array of objects with string keys skill and answer: for each JD skill the resume does not show, a confident first-person answer that connects it to the closest real work on the resume and how the candidate applies that knowledge, with no hedging words and without claiming the tool was used where the resume does not say so), strengths (array of 6 short strings), weakness (one genuine but safe weakness and what the candidate does about it), whyRole (2 to 3 sentences), questions (array of 14 questions most likely to be asked). Never contradict the resume. Everything must add up: total years equal the roles, project dates sit inside the dates of the role at that company, every tool mentioned for a project is in that project stack, and each number is stated the same way everywhere. No markdown, no commentary.'+(rpOn()?' ROLE-PLAY MODE: this is a practice role-play of an ideal candidate. Give the candidate hands-on experience with every skill and tool in the JD: put each one in skillMap with a specific resume project where it was used and how, with concrete detail, and leave bridges empty. Keep the companies, titles and dates from the resume.':'')+NL+NL+roleBlockBase();
@@ -961,11 +961,13 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       if(words(t).length<30)throw new Error('Could not find much text in that file. Try a PDF, a .docx, or a clear photo of the resume.');
       bg.value=t;store.set('pc-bg',t);
       dlog('resume',{kind:n.split('.').pop(),words:words(t).length});
-      note.textContent='Resume loaded: '+words(t).length+' words. You can check it in the box below.';
+      store.set('pc-bgname',f.name);note.textContent='Resume attached: '+f.name+'.';
       if(jd.value.trim()){note.textContent+=' Building your story now.';$('buildProfile').click()}
       else note.textContent+=' Add the job description, then press Build my story.';
     }catch(err){note.textContent=(err&&err.message)||'Could not read that file.'}
   };
+
+  if(bg.value.trim())$('resumeNote').textContent='Resume attached'+(store.get('pc-bgname','')?': '+store.get('pc-bgname',''):'')+'. Attach again to replace it.';
 
   /* ---------- role-play mode ---------- */
   function rpOn(){try{return $('roleplay').checked}catch(e){return false}}
