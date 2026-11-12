@@ -261,6 +261,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       <button class="micbtn" id="micBtn" aria-label="Start listening"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"/></svg></button>
       <div class="qbox">
         <div class="status" id="micStatus">Tap the mic and ask the question</div>
+        <div class="note" id="micDebug" hidden style="font-family:var(--f-mono);overflow-wrap:anywhere"></div>
         <textarea id="iq" rows="2" placeholder="The question appears here as you speak. You can also type or edit it."></textarea>
         <div class="row">
           <button class="btn primary" id="iAsk">Get answer</button>
@@ -268,7 +269,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
           <label class="btn small" for="iFile">Attach picture</label><input type="file" id="iFile" accept="image/*" multiple hidden>
           <details style="width:100%"><summary class="note" style="cursor:pointer">Mic options</summary><div class="row"><label class="chk"><input type="checkbox" id="autoSend" checked> Answer the moment I finish a question</label>
           <label class="chk"><input type="checkbox" id="keepOn" checked> Continuous mic (keep listening)</label>
-          <label class="chk"><input type="checkbox" id="earlyOn" checked> Start answering while I ask</label></div></details>
+          <label class="chk"><input type="checkbox" id="earlyOn" checked> Start answering while I ask</label>
+          <label class="chk"><input type="checkbox" id="dbgOn"> Show what the mic hears</label>
+          <label class="chk"><input type="checkbox" id="diagOn" checked> Save mic logs so Claude can fix problems</label></div></details>
         </div>
         <div class="thumbs" id="iThumbs"></div>
         <div class="note">Continuous mode keeps listening until you tap the mic. Hold Shift while you speak and everything you say is ignored.</div>
@@ -427,7 +430,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   const picI=picker('iFile','iThumbs',$('iq')),picE=picker('eFile','eThumbs',$('eq'));
   const picNote='\n\nThe question, or part of it, is in the attached picture(s). Read them carefully, including any code, diagrams, tables and handwriting, and answer what is shown. If something is unreadable, say what you could not read.';
-  function errText(e){
+  function errText(e){dlog('error',{m:String((e&&e.message)||e).slice(0,200),code:(e&&e.code)||''});
     logIssue('error',{message:String((e&&e.message)||e).slice(0,300),code:(e&&e.code)||''});
     if(e&&e.code==='not_granted')return 'Permission to ask Claude was declined. Reload and allow it to continue.';
     if(e&&e.code==='rate_limited')return 'Too many requests. Wait a moment and try again.';
@@ -466,21 +469,21 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const imgs=picI.blobs();const typed=iq.value.trim();
     if(!typed&&!imgs.length)return;
     const cls=manual===true?'q':classify(typed);
-    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){stopSpec();discardDraft();utterStart=0;iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
+    if(manual!==true&&(paused||cls==='cand'||echoes(typed))){dlog('skip',{text:typed.slice(0,200),why:paused?'paused':cls==='cand'?'candidate':'echo'});consumed=(consumed?consumed+' ':'')+typed;stopSpec();discardDraft();utterStart=0;iq.value='';target.base='';target.finals='';if(cls==='cand')micStatus.textContent='Heard you speaking, so no answer was sent';return}
     if(busyI)return;
     const mrg=manual!==true?mergeTarget(typed):null;const endAt=lastFinalAt;
     const q=mrg?mrg.q+' '+typed:(typed||'(The question is in the attached picture.)');
     busyI=true;$('iAsk').disabled=true;$('iEmpty').hidden=true;iq.value='';target.base='';target.finals='';clearTimeout(sendT);
     const t=takeDraft(q+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):''),mrg&&mrg.t);
     if(mrg){t.querySelectorAll('.refine,.chips').forEach(x=>x.remove());const ix=history.indexOf(mrg.h);if(ix>=0)history.splice(ix,1)}
-    utterStart=0;const out=t.querySelector('.out');let last='';
+    dlog('ask',{q:q.slice(0,200),cls,merged:!!mrg,manual:manual===true,adopt:!!(spec&&sameQ(spec.q,q))});if(manual!==true)consumed=(consumed?consumed+' ':'')+typed;utterStart=0;const out=t.querySelector('.out');let last='';
     try{
       const live=manual!==true&&cls!=='q';
       const r=await runI(q,live,imgs,txt=>{if(!txt)return;last=txt;liveAns=txt;t.hidden=/^\s*\[\[/.test(txt);if(!t.hidden)out.innerHTML=md(txt)});
       picI.clear();
       last=r.text||last;liveAns='';
-      if(/^\s*\[\[IGNORE/i.test(last)){t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
-      else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);lastTurn={q,t,h,endAt};t.querySelector('.meta span').textContent='Candidate · ready '+Math.max(0,(Date.now()-endAt)/1000).toFixed(1)+'s after you finished';ansUntil=Date.now()+Math.min(90000,Math.max(8000,words(last).length/2.4*1000));wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
+      if(/^\s*\[\[IGNORE/i.test(last)){dlog('ignored',{q:q.slice(0,200)});t.hidden=false;out.innerHTML='<span class="note">Skipped: this did not sound like a question for the candidate. </span>';const ab=el('button','btn small','Answer anyway');ab.type='button';ab.onclick=()=>{logIssue('false-skip',{question:q.slice(0,300)});t.remove();iq.value=q;askInterview(true)};out.append(ab)}
+      else{t.hidden=false;out.innerHTML=md(last);const h={q,a:last};history.push(h);lastTurn={q,t,h,endAt};dlog('answered',{afterEndMs:Date.now()-endAt,len:last.length});t.querySelector('.meta span').textContent='Candidate · ready '+Math.max(0,(Date.now()-endAt)/1000).toFixed(1)+'s after you finished';ansUntil=Date.now()+Math.min(90000,Math.max(8000,words(last).length/2.4*1000));wireCopy(t,()=>last);wireRefine(t,out,q,()=>last,v=>{last=v;h.a=v})}
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';iq.value=q}
     busyI=false;$('iAsk').disabled=false;
     if(listening&&target.auto&&$('autoSend').checked&&iq.value.trim())askInterview();
@@ -508,11 +511,11 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       return;
     }
     $('eMic').hidden=false;$('mMic').hidden=false;
-    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(!utterStart)utterStart=Date.now();if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);maybeSpec();target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+text});
-    dict.onFinal(({text})=>{if(paused)return;lastFinalAt=Date.now();if(!utterStart)utterStart=Date.now();target.finals=(target.finals?target.finals+' ':'')+text;target.value=(target.base?target.base+' ':'')+target.finals;
+    dict.onPartial(({text})=>{if(paused)return;clearTimeout(sendT);if(!utterStart)utterStart=Date.now();if(target.auto&&$('autoSend').checked)sendT=setTimeout(endOfSpeech,2000);maybeSpec();target.value=(target.base?target.base+' ':'')+(target.finals?target.finals+' ':'')+livePart(text);liveBubble();dbg('heard',text);dlogP(text)});
+    dict.onFinal(({text})=>{if(paused)return;lastFinalAt=Date.now();if(!utterStart)utterStart=Date.now();dbg('final',text);dlog('final',{text:String(text).slice(0,200)});target.finals=joinFinal(target.finals,stripConsumed(text));target.value=(target.base?target.base+' ':'')+target.finals;
       if(target.auto&&$('autoSend').checked){clearTimeout(sendT);sendT=setTimeout(endOfSpeech,classify(target.value)==='q'?1500:2200);kickFinal()}});
-    dict.onState(({state,reason})=>{
-      if(state==='listening'){setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
+    dict.onState(({state,reason})=>{dlog('mic',{state,reason:reason||''});
+      if(state==='listening'){consumed='';setMic(true,'Listening… speak the question');if(target.btn)target.btn.textContent='Stop'}
       else{
         const was=listening;clearTimeout(sendT);setMic(false,'Tap the mic and ask the question');if(target.btn)target.btn.textContent='Dictate';
         if(was&&target.auto&&$('autoSend').checked&&target.value.trim())askInterview();
@@ -797,6 +800,65 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     dict.start().catch(()=>{needResume=true});
   },true);
 
+  /* ---------- clean transcript: never carry earlier questions into the next one ---------- */
+  /* Some voice engines resend the whole session, or the whole phrase so far, with every update. Text already handled is stripped off the front. */
+  let consumed='';const dbgState={};
+  const wn=w=>w.toLowerCase().replace(/[^a-z0-9]/g,'');
+  function dropPrefix(t,p){
+    const a=String(t).trim().split(' ').filter(Boolean),b=String(p||'').trim().split(' ').filter(Boolean);
+    if(!b.length||a.length<b.length)return t;
+    for(let i=0;i<b.length;i++)if(wn(a[i])!==wn(b[i]))return t;
+    return a.slice(b.length).join(' ');
+  }
+  function stripConsumed(t){return consumed?dropPrefix(t,consumed):t}
+  function livePart(t){t=stripConsumed(t);if(target.finals){const r=dropPrefix(t,target.finals);if(r!==t)t=r}return t}
+  function joinFinal(fin,t){
+    if(!fin)return t;
+    const r=dropPrefix(t,fin);
+    return r!==t?(r?fin+' '+r:fin):fin+' '+t;
+  }
+  /* show the question in its card the moment it is heard, before any answer text exists */
+  function liveBubble(){
+    if(!$('earlyOn').checked||paused||!target.auto)return;
+    const q=target.value.trim();if(words(q).length<2||classify(q)==='cand')return;
+    const sm=mergeTarget(q),fq=sm?sm.q+' '+q:q;
+    if(!draftCard){
+      draftCard=sm?sm.t:addTurn(iThread,fq,'Draft, updating as you speak');
+      draftCard.querySelector('.meta span').textContent='Draft, updating as you speak';
+      const o=draftCard.querySelector('.out');if(o.textContent==='Thinking…')o.textContent='Listening to the question…';
+      $('iEmpty').hidden=true;
+    }
+    setBubble(draftCard,fq);
+  }
+  function dbg(k,v){
+    if(!$('dbgOn').checked)return;
+    dbgState[k]=v;const d=$('micDebug');d.hidden=false;
+    d.textContent='heard: '+(dbgState.heard||'')+'  |  last final: '+(dbgState.final||'')+'  |  question box: '+(target.value||'')+'  |  type: '+(classify(target.value||'')||'-')+'  |  draft: '+(spec?(spec.done?'ready':'writing'):'none');
+  }
+
+  /* ---------- diagnostics: a log of each visit, saved to this artifact so Claude can read it and fix problems ---------- */
+  const diag={id:'d'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),t0:Date.now(),ev:[],dirty:false,writing:false};
+  let lastP=0;
+  function dlog(type,data){
+    try{if(!$('diagOn').checked||diag.ev.length>=700)return}catch(e){return}
+    diag.ev.push(Object.assign({t:Date.now()-diag.t0,type},data||{}));diag.dirty=true;
+  }
+  function dlogP(t){const n=Date.now();if(n-lastP<1000)return;lastP=n;dlog('partial',{text:String(t).slice(0,200)})}
+  async function dflush(){
+    if(!db||!diag.dirty||diag.writing)return;
+    diag.writing=true;diag.dirty=false;
+    const v=id=>{try{const e=$(id);return e.type==='checkbox'?e.checked:e.value}catch(x){return null}};
+    const doc={ts:diag.t0,role:roleTitle(),ua:navigator.userAgent.slice(0,160),
+      env:{dictation:!!dict,sample:!!sample,db:!!db},
+      settings:{round:v('iRound'),len:v('iLen'),accent:v('iAccent'),voice:v('iVoice'),autoSend:v('autoSend'),keepOn:v('keepOn'),earlyOn:v('earlyOn')},
+      events:diag.ev};
+    try{await db.collection('diag').doc(diag.id).set(doc)}catch(e){diag.dirty=true}
+    diag.writing=false;
+  }
+  setInterval(dflush,10000);
+  addEventListener('visibilitychange',()=>{if(document.hidden)dflush()});
+  setTimeout(()=>{dlog('boot',{dictation:!!dict,sample:!!sample,db:!!db,view:(location.hash||'#home')});dflush()},4000);
+
   /* ---------- human voice ---------- */
   const HUMAN='Write exactly how a real person talks in an interview, not how an AI writes. Use contractions, everyday words and some short sentences. Start by actually answering, with no filler opener, and never say Great question, Certainly, Absolutely or Sure. Sound like one specific person with opinions: say what you actually did, what went wrong, and what you would do differently. Use a natural spoken touch now and then, such as Honestly, I think, or So basically, but not in every sentence. No bullet points, no bold, no headings, no numbered lists, no em dashes, no semicolons, no neat three-part patterns, and never a closing summary that repeats the answer. Avoid words like leverage, utilize, robust, seamless, delve, crucial, holistic, passionate and synergy. Stay modest with numbers and do not over-polish. Only use a list or a code block when the question truly asks for one.';
   function accentNote(){return $('iAccent').value==='in'?'Speaking style: natural Indian English, the way a polished professional from India speaks in an interview. Simple clear sentences, respectful and warm, using phrasing like I have worked on, so basically, what I did was, in my previous project, and actually naturally and sparingly. Do not exaggerate it, no slang caricature, no phonetic spelling, and keep it fully professional and easy to understand. Contractions are optional.':''}
@@ -849,12 +911,12 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(!draftCard){draftCard=addTurn(iThread,q,'Draft, updating as you speak')}
     else{setBubble(draftCard,q);draftCard.querySelector('.meta span').textContent='Draft, updating as you speak'}
     const card=draftCard;{const o0=card.querySelector('.out');if(o0.textContent==='Thinking…')o0.textContent='Listening to the question…'}
-    const s={q,ctrl,text:'',done:false,err:null,onText:null,onDone:null,t0:Date.now()};
+    dlog('draft',{q:q.slice(0,200),live:!!live});const s={q,ctrl,text:'',done:false,err:null,onText:null,onDone:null,t0:Date.now()};
     spec=s;
     run(interviewPrompt(q,!!live),txt=>{s.text=txt;if(s.onText)s.onText(txt);else if(draftCard===card&&!/^\s*\[\[/.test(txt))card.querySelector('.out').innerHTML=md(txt)},null,'quick',ctrl.signal)
       .then(r=>{s.text=r.text||s.text})
       .catch(e=>{s.err=e;if(e&&e.code==='rate_limited')specOff=Date.now()+30000})
-      .then(()=>{s.done=true;if(!s.onText&&draftCard===card&&/^\s*\[\[IGNORE/i.test(s.text))discardDraft();if(!s.err&&draftCard===card)card.querySelector('.meta span').textContent='Draft, updating as you speak · '+((Date.now()-s.t0)/1000).toFixed(1)+'s per update';if(s.onDone)s.onDone();if(specDirty&&spec===s){specDirty=false;maybeSpec()}});
+      .then(()=>{s.done=true;dlog('draftDone',{ms:Date.now()-s.t0,err:s.err?String(s.err.code||s.err.message||'err'):'',aborted:s.ctrl.signal.aborted});if(!s.onText&&draftCard===card&&/^\s*\[\[IGNORE/i.test(s.text))discardDraft();if(!s.err&&draftCard===card)card.querySelector('.meta span').textContent='Draft, updating as you speak · '+((Date.now()-s.t0)/1000).toFixed(1)+'s per update';if(s.onDone)s.onDone();if(specDirty&&spec===s){specDirty=false;maybeSpec()}});
   }
   function maybeSpec(){
     /* throttled, not debounced: keeps drafting while the question is still being spoken; one draft at a time, never aborted mid-stream */
