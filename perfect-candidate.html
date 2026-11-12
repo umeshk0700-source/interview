@@ -246,8 +246,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       </label>
       <label class="f">Answer length
         <select id="iLen">
-          <option value="short">Spoken, about 30 seconds</option>
-          <option value="deep">Detailed deep-dive</option>
+          <option value="auto" selected>Auto: long when the question needs it</option>
+          <option value="short">Always short</option>
+          <option value="deep">Always detailed</option>
         </select>
       </label>
     </div>
@@ -452,7 +453,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   const iq=$('iq'),iThread=$('iThread');
   const roundNote={general:'a mixed interview',hr:'an HR and behavioural round: stay warm and specific, and use a short situation, action, result story only when asked for an example',technical:'',tech:'a technical round: be precise, state trade-offs and when you would pick each option, mention real use cases',design:'a system design or case round: clarify requirements, outline the architecture, then trade-offs and risks',coding:'a coding round: give the approach, working code, complexity and edge cases'};
   function interviewPrompt(q,live){
-    const deep=$('iLen').value!=='short';
+    const mode=$('iLen').value||'auto';
     const hist=history.slice(-5).map(h=>'Interviewer: '+h.q+NL+'Candidate: '+h.a.slice(0,300)).join(NL+NL);
     const p=[
       'You are the candidate in a live job interview, answering out loud in the first person. You fit this role completely and speak with calm, clear confidence.',
@@ -462,10 +463,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       '- What is X, a concept, or a comparison: explain it clearly in plain words. At most one short line about your own use, without naming the project.'+NL+
       '- How did you, tell me about, walk me through, give an example, describe a time: now tell the one most relevant project from the story: the situation, what you did, the result.'+NL+
       '- Where, which project, which company, when, how big: give exactly that detail from the story and nothing more.'+NL+
-      '- HR and behavioural questions: a short, genuine answer, with one story only when the question asks for an example.'+NL+
+      '- HR and behavioural questions: a short, genuine answer, with one story only when the question asks for an example.'+NL+'- Long-form questions always get a full answer: tell me about yourself, introduce yourself, walk me through your resume or career, explain your current or best project end to end, describe your architecture or a system design, and behavioural questions that ask for a specific example.'+NL+'- Tell me about yourself and introduce yourself: about 60 to 90 seconds, 8 to 12 sentences, built on the story pitch: who you are and your total experience, your current role, the two or three projects that matter most for this job with one result each, the core skills you bring to this role, and why this role. Never cut it to a few lines.'+NL+'- Project walkthroughs and design questions: about 90 seconds to 2 minutes: the problem, the architecture and stack, your own part, a challenge you solved, and the result.'+NL+
       '- Never volunteer projects, employers, dates or numbers the question did not ask for, and never list several projects when one answers it.'+NL+
-      (deep?'- Length: detailed mode, so go deeper on concepts, trade-offs and use cases, but still answer only what was asked and never pad.'
-           :'- Length: one or two sentences for yes or no and quick checks; three to five sentences for concept and experience questions; never more than about 30 seconds of speech.'),
+      LENGTH[mode],
       'STAY CONSISTENT'+NL+
       '- Every company, project, date, tool, team size and number you mention must match THE CANDIDATE STORY and everything already said in CONVERSATION SO FAR. Never invent new ones; when a detail is needed, reuse the one already given.'+NL+
       '- For a skill with no direct evidence in the story, give its bridge with confidence and keep it short.'+rpNote()+NL+
@@ -477,6 +477,11 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     p.push('Interviewer: '+q,'Candidate:');
     return p.join(NL+NL);
   }
+  const LENGTH={
+    auto:'- Length: fit the question. Yes or no and quick checks: one or two sentences. Concepts and normal experience questions: three to five sentences. The long-form questions above: their full length. Never pad a short question and never cut a long-form one short.',
+    short:'- Length: keep every answer brief, one to three sentences, even for long-form questions.',
+    deep:'- Length: detailed mode: go deeper on every question with concepts, trade-offs and use cases, and give long-form questions their full length, but still answer only what was asked.'
+  };
   const LIVE_NOTE='LIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else. Short or informal questions such as what is SQL are questions: answer them. When in doubt, answer.';
   function addTurn(thread,qText,tag){
     const t=document.createElement('div');t.className='turn';
