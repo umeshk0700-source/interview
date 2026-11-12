@@ -379,7 +379,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   /* ---------- Claude ---------- */
   let sample=null;
   (async()=>{try{sample=await claude.use('sample')}catch(e){sample=null}if(!sample)$('foot').textContent='Asking Claude is not available in this view, so answers cannot be generated here. Open the page in Claude.'})();
-  const roleBlockBase=()=>'JOB DESCRIPTION:\n'+(jd.value.trim()||'(none provided: assume a strong generalist professional)')+'\n\nCANDIDATE BACKGROUND:\n'+(bg.value.trim()||'(none provided)');
+  const roleBlockBase=()=>'JOB DESCRIPTION:\n'+(jd.value.trim()||'(none provided: assume a strong generalist professional)')+'\n\nCANDIDATE RESUME:\n'+(bg.value.trim()||'(none provided)');
 
   async function run(prompt,onText,images,tier,signal){
     if(!sample)throw {message:'Asking Claude is not available here.'};
@@ -572,7 +572,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     busyE=true;$('eAsk').disabled=true;$('eEmpty').hidden=true;
     const label=(typed.length>140?typed.slice(0,140)+'…':typed)||'Picture question';
     const t=addTurn($('eThread'),label+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):imgs.length>1?' ('+imgs.length+' pictures)':''),'Solution');const out=t.querySelector('.out');let last='';
-    const prompt='You are an expert tutor helping a candidate practise for an exam connected to the role below. Solve the question correctly and carefully; check your work before answering. '+typeNote[$('eType').value]+' '+depthNote[$('eDepth').value]+'\n\nFormat: the very first line must be exactly "ANSWER: " followed by the final answer (for multiple choice the option letter and its text; for coding a one-line summary of the approach, with the full code after). Then the explanation. If the question is ambiguous or missing information, say what you assumed.\n\n'+roleBlock()+'\n\nQUESTION:\n'+q+(imgs.length?picNote:'');
+    const prompt='You are an expert tutor helping a candidate practise for an exam connected to the role below. Solve the question correctly and carefully; check your work before answering. '+typeNote[$('eType').value]+' '+depthNote[$('eDepth').value]+'\n\nFormat: the very first line must be exactly "ANSWER: " followed by the final answer (for multiple choice the option letter and its text; for coding a one-line summary of the approach, with the full code after). Then the explanation. If the question is ambiguous or missing information, say what you assumed.\n\n'+examContext()+'\n\nQUESTION:\n'+q+(imgs.length?picNote:'');
     const render=txt=>{
       const m=txt.match(/^\s*ANSWER:\s*(.*)\n?/i);
       if(m){out.innerHTML='<div class="final"><small>FINAL ANSWER</small>'+inl(m[1])+'</div>'+md(txt.slice(m[0].length))}
@@ -638,7 +638,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
         const sa=ra.text||'';const fixed=JSON.parse(sa.slice(sa.indexOf('{'),sa.lastIndexOf('}')+1));
         if(fixed&&fixed.facts&&fixed.pitch)Object.assign(p,fixed);
       }catch(e){}
-      p.illustrative=!bg.value.trim();p.roleplay=rpOn();claims=[];store.set('pc-claims','[]');profile=p;store.set('pc-profile',JSON.stringify(p));renderProfile();
+      p.illustrative=!bg.value.trim();p.roleplay=rpOn();claims=[];store.set('pc-claims','[]');profile=p;store.set('pc-profile',JSON.stringify(p));renderProfile();loadBank();Object.keys(prepCache).forEach(k=>delete prepCache[k]);
       $('profNote').textContent='Story ready. Check the fixed facts below, then every answer sticks to them.';
     }catch(e){$('profNote').textContent=e instanceof SyntaxError?'Could not read the result. Try again.':errText(e)}
     btn.disabled=false;
@@ -648,11 +648,11 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   /* ---------- refine an answer ---------- */
   function wireRefine(t,out,q,get,set){
     const bar=el('div','refine');
-    [['Shorter','Make it noticeably shorter: about half the length, same key points.'],['More detail','Expand it with more depth, trade-offs and one concrete use case.'],['Add example','Add one concrete, specific example from real work the candidate did that proves the point.']].forEach(([label,ins])=>{
+    [['Shorter','Make it noticeably shorter: about half the length, same key points.'],['More detail','Expand it with more depth, trade-offs and one concrete use case.'],['Add example','Add one concrete, specific example from a project in the candidate story that proves the point.']].forEach(([label,ins])=>{
       const b=el('button','btn small',label);b.type='button';
       b.onclick=async()=>{
         const all=bar.querySelectorAll('button');all.forEach(x=>x.disabled=true);
-        const prompt='You are the ideal candidate for the role below, in a live interview. Speak in first person.'+NL+NL+roleBlock()+NL+NL+'Interviewer: '+q+NL+NL+'Current answer:'+NL+get()+NL+NL+'Rewrite the answer. '+ins+' Keep a natural spoken style and stay consistent with the profile. '+HUMAN+' '+accentNote()+' Output only the new answer.';
+        const prompt='You are the ideal candidate for the role below, in a live interview. Speak in first person.'+NL+NL+roleBlock()+NL+NL+'Interviewer: '+q+NL+NL+'Current answer:'+NL+get()+NL+NL+'Rewrite the answer. '+ins+' Keep a natural spoken style and stay consistent with the profile. '+STICK+rpNote()+' '+HUMAN+' '+accentNote()+' Output only the new answer.';
         try{const r=await run(prompt,txt=>{out.innerHTML=md(txt)},null,'quick');const v=r.text||get();set(v);out.innerHTML=md(v)}
         catch(e){out.innerHTML=md(get())+'<p class="err">'+esc(errText(e))+'</p>'}
         all.forEach(x=>x.disabled=false);
@@ -711,7 +711,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     mock.busy=true;$('mSubmit').disabled=true;mockUI('feedback');
     mFB.innerHTML='<div class="a"><div class="out">Reviewing your answer…</div></div>';
     const out=mFB.querySelector('.out');let last='';
-    const prompt='You are a strict but fair interview coach. Score the candidate answer below for the role. Format: the first line must be exactly SCORE: n/10 with n an integer. Then three short sections whose labels are on their own lines: What worked, What to fix, Stronger answer. Under Stronger answer write a model answer in first person that fits the JD and background, no longer than the original unless it needs to be. Write it as natural human speech: contractions, plain words, no lists, no filler openers, no em dashes. '+accentNote()+' Be specific. No flattery.'+NL+NL+roleBlock()+NL+NL+'Question: '+mock.qs[mock.i]+NL+NL+'Candidate answer: '+a;
+    const prompt='You are a strict but fair interview coach. Score the candidate answer below for the role. Format: the first line must be exactly SCORE: n/10 with n an integer. Then three short sections whose labels are on their own lines: What worked, What to fix, Stronger answer. Under Stronger answer write a model answer in first person that fits the JD and background, no longer than the original unless it needs to be. Write it as natural human speech: contractions, plain words, no lists, no filler openers, no em dashes. '+accentNote()+' '+STICK+rpNote()+' Be specific. No flattery.'+NL+NL+roleBlock()+NL+NL+'Question: '+mock.qs[mock.i]+NL+NL+'Candidate answer: '+a;
     try{
       const r=await run(prompt,txt=>{last=txt;out.innerHTML=renderFB(txt)},null,'default');
       last=r.text||last;out.innerHTML=renderFB(last);
@@ -759,7 +759,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(prepCache[key]&&!force){body.innerHTML=md(prepCache[key]);$('prepCopy').hidden=false;return}
     if(!jd.value.trim()){body.innerHTML='<span class="err">Add the job description in the Role panel first.</span>';$('role').open=true;return}
     body.textContent='Writing…';
-    const prompt='You are an expert career coach writing for this candidate. '+p[2]+' Make it sound like a real person wrote it: plain words, no buzzwords, no cliches, no em dashes.'+NL+NL+roleBlock();
+    const prompt='You are an expert career coach writing for this candidate. '+p[2]+' Make it sound like a real person wrote it: plain words, no buzzwords, no cliches, no em dashes. '+STICK+rpNote()+NL+NL+roleBlock();
     try{const r=await run(prompt,txt=>{body.innerHTML=md(txt)},null,'default');prepCache[key]=r.text||'';body.innerHTML=md(prepCache[key]);$('prepCopy').hidden=false}
     catch(e){body.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
   }
@@ -976,6 +976,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   $('roleplay').onchange=()=>store.set('pc-rp',$('roleplay').checked?'1':'0');
 
   /* ---------- the fixed candidate story ---------- */
+  const STICK='Stick strictly to THE CANDIDATE STORY: the same companies, projects, dates, tools and numbers, never invent new ones and never contradict it.';
+  /* exam questions only need the job context, not the whole story */
+  function examContext(){return 'JOB CONTEXT: '+(jd.value.trim().slice(0,1200)||'(none provided)')}
   function storyText(full){
     if(!profile)return '';
     const P=profile,J=(a,f)=>(a||[]).map(f).join(' | ');
@@ -1135,7 +1138,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   ];
   let bank={},known=new Set(),openCats=new Set(),bankBusy=false,bankStop=false,clr=null;
   try{known=new Set(JSON.parse(store.get('pc-known','[]')))}catch(e){}
-  const bankFp=()=>jd.value.trim().length+'|'+jd.value.trim().slice(0,80);
+  const bankFp=()=>jd.value.trim().length+'|'+jd.value.trim().slice(0,80)+'|'+(profile?String(profile.pitch||'').slice(0,60):'');
   function saveBank(){store.set('pc-bank',JSON.stringify({fp:bankFp(),bank}))}
   function loadBank(){
     bank={};
@@ -1193,7 +1196,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     $('bankStatus').textContent='Writing '+cat[1]+'…';openCats.add(key);
     const det=$('cat-'+key);if(det)det.open=true;
     bank[key]=[];fillCat(key);
-    const prompt='You are preparing a candidate for a job interview. Category: '+cat[1]+' ('+cat[2]+'). Write 12 interview questions with model answers for this category. Cover what an interviewer could realistically ask for this exact role and level, ordered from basic to advanced. Each answer is what the candidate would actually say aloud: 3 to 6 sentences, concrete, with a short example where it helps. For coding questions put the code in a fenced code block. Use exactly this format and nothing else: a line starting with Q: and the question, then a line starting with A: and the answer, then a line containing only ### to end the pair. '+HUMAN_LIVE+' '+accentNote()+NL+NL+roleBlock();
+    const prompt='You are preparing a candidate for a job interview. Category: '+cat[1]+' ('+cat[2]+'). Write 12 interview questions with model answers for this category. Cover what an interviewer could realistically ask for this exact role and level, ordered from basic to advanced. Each answer is what the candidate would actually say aloud: 3 to 6 sentences, concrete, with a short example where it helps. For coding questions put the code in a fenced code block. Use exactly this format and nothing else: a line starting with Q: and the question, then a line starting with A: and the answer, then a line containing only ### to end the pair. '+STICK+rpNote()+' '+HUMAN_LIVE+' '+accentNote()+NL+NL+roleBlock();
     let tick=0,ok=false;
     try{
       const r=await run(prompt,txt=>{const now=Date.now();if(now-tick<600)return;tick=now;bank[key]=parseQA(txt,false);fillCat(key)},null,'default');
