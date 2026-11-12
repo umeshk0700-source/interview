@@ -146,12 +146,12 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       <label class="f">Company (optional)
         <input type="text" id="company" placeholder="Company name, used in letters and questions to ask">
       </label>
-      <label class="f">Your background (optional)
-        <textarea id="bg" rows="4" placeholder="Years of experience, past roles, projects, achievements, tools you really used"></textarea>
-        <span class="hint">Answers about experience stay true to this. Leave it empty and the candidate draws on what the JD calls for, with illustrative examples you should replace.</span>
+      <label class="f">Your resume
+        <textarea id="bg" rows="4" placeholder="Paste your full resume: roles, companies, dates, projects, tools and results"></textarea>
+        <span class="hint">Your story is built from this, and every answer sticks to it.</span>
       </label>
       <div class="row"><button class="btn primary" id="saveRole">Save role</button><span class="note" id="saveNote"></span></div>
-      <div class="row"><button class="btn" id="buildProfile">Build candidate profile</button><span class="note" id="profNote">Creates a pitch, strengths, project stories and likely questions. Every answer then stays consistent with it.</span></div>
+      <div class="row"><button class="btn primary" id="buildProfile">Build my story</button><span class="note" id="profNote">Builds one fixed story from your resume for this JD: facts, projects, where you used each JD skill, and confident bridges for the rest. Every answer then sticks to it, with no contradictions.</span></div>
       <div id="profileBox"></div>
     </div>
   </details>
@@ -451,8 +451,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const len=$('iLen').value==='short'
       ?'Give a spoken answer of 4 to 6 sentences (about 30 seconds). Start with the answer straight away. Plain sentences, no headings, no bullet lists unless the question asks for a list. '+HUMAN_LIVE+' '+voiceNote()
       :'Give a detailed answer with clear structure. Short paragraphs or bullets are fine. Include concrete use cases and trade-offs. '+HUMAN+' '+voiceNote();
-    const hist=history.slice(-3).map(h=>'Interviewer: '+h.q+'\nCandidate: '+h.a.slice(0,300)).join('\n\n');
-    return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. When asked about experience, use the background provided; if none is provided, give a realistic, modest example consistent with the JD. Never claim certifications, employers or numbers that the background contradicts. If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+liveBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+(live?'\n\nLIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else. Short or informal questions such as what is SQL are questions: answer them. When in doubt, answer.':'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
+    const hist=history.slice(-5).map(h=>'Interviewer: '+h.q+'\nCandidate: '+h.a.slice(0,300)).join('\n\n');
+    return 'You are the ideal candidate for the role below, answering in a live interview. Speak in first person as that candidate. Cover the skills, tools and responsibilities the JD emphasises. Stick strictly to THE CANDIDATE STORY: the same companies, projects, dates, tools and numbers every time, and never contradict anything already said in CONVERSATION SO FAR. Never invent new employers, projects or numbers. Answer with complete clarity and confidence, like someone made for this role: no hedging, never say you are not sure, never describe your experience as limited. For a skill without direct evidence, give its bridge confidently and tie it to your real projects. If a question is unclear, answer the most likely reading.\n\nThis is '+roundNote[$('iRound').value]+'.\n'+len+'\n\n'+liveBlock()+(hist?'\n\nCONVERSATION SO FAR:\n'+hist:'')+(live?'\n\nLIVE MICROPHONE MODE: the text below is an automatic transcript of a microphone. It may be the interviewer asking a question or giving a prompt, but it may also be the candidate speaking (reading out or paraphrasing an earlier answer, thinking aloud, saying filler) or background chatter. Answer only if it is something the interviewer is asking or prompting the candidate to respond to. If it is the candidate speaking or anything that is not a question or prompt for the candidate, reply with exactly [[IGNORE]] and nothing else. Short or informal questions such as what is SQL are questions: answer them. When in doubt, answer.':'')+'\n\nInterviewer: '+q+'\n\nCandidate:';
   }
   function addTurn(thread,qText,tag){
     const t=document.createElement('div');t.className='turn';
@@ -588,7 +588,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   let profile=null;try{profile=JSON.parse(store.get('pc-profile','null'))}catch(e){}
   function profileText(){
     if(!profile)return '';
-    return NL+NL+'CANDIDATE PROFILE (stay consistent with this in every answer):'+NL+'Pitch: '+profile.pitch+NL+'Strengths: '+(profile.strengths||[]).join('; ')+NL+'Project stories:'+NL+(profile.stories||[]).map(s=>'- '+s.title+': '+s.situation+' Action: '+s.action+' Result: '+s.result).join(NL);
+    return storyText(true);
   }
   function roleBlock(){const c=$('company').value.trim();return roleBlockBase()+(c?NL+NL+'COMPANY: '+c:'')+profileText()}
   function el(tag,cls,txt){const e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.textContent=txt;return e}
@@ -601,20 +601,32 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     card.append(el('h3',null,'Strengths'));const ul=el('ul');(profile.strengths||[]).forEach(s=>ul.append(el('li',null,s)));card.append(ul);
     card.append(el('h3',null,'Stories'));
     (profile.stories||[]).forEach(s=>{const d=el('p');d.append(el('strong',null,s.title+'. '),document.createTextNode(s.situation+' '+s.action+' '+s.result));card.append(d)});
+    if(profile.facts&&profile.facts.length){
+      card.append(el('h3',null,'Fixed facts: every answer uses these. Correct anything that is wrong'));
+      const ta=el('textarea');ta.id='factsEdit';ta.rows=Math.min(16,profile.facts.length+1);ta.value=profile.facts.join(NL);
+      const sv=el('button','btn small','Save facts');sv.type='button';sv.style.justifySelf='start';
+      sv.onclick=()=>{profile.facts=ta.value.split(NL).map(x=>x.trim()).filter(Boolean);store.set('pc-profile',JSON.stringify(profile));sv.textContent='Saved';setTimeout(()=>sv.textContent='Save facts',1500)};
+      card.append(ta,sv);
+    }
+    if(profile.skillMap&&profile.skillMap.length){card.append(el('h3',null,'JD skills and where you used them'));const sl=el('ul');profile.skillMap.forEach(x=>sl.append(el('li',null,x.skill+': '+x.evidence)));card.append(sl)}
+    if(profile.bridges&&profile.bridges.length){card.append(el('h3',null,'Skills not on your resume: how you answer'));const bl=el('ul');profile.bridges.forEach(x=>bl.append(el('li',null,x.skill+': '+x.answer)));card.append(bl)}
+    if(profile.weakness)card.append(el('h3',null,'Weakness'),el('p',null,profile.weakness));
+    if(profile.whyRole)card.append(el('h3',null,'Why this role'),el('p',null,profile.whyRole));
     box.append(card);
     (profile.questions||[]).forEach(q=>{const b=el('button','chip',q);b.type='button';b.onclick=()=>{location.hash='interview';iq.value=q;askInterview(true)};qc.append(b)});
     $('qWrap').hidden=!(profile.questions||[]).length;
   }
   $('buildProfile').onclick=async()=>{
     if(!jd.value.trim()){$('profNote').textContent='Add the job description first.';return}
+    if(!bg.value.trim()){$('profNote').textContent='Paste your resume first. The story is built only from it.';return}
     store.set('pc-jd',jd.value);store.set('pc-bg',bg.value);roleLabel();
     const btn=$('buildProfile');btn.disabled=true;$('profNote').textContent='Building the profile…';
-    const prompt='Design the ideal candidate for the role below. Return only a JSON object with these keys: pitch (a 3 to 4 sentence first-person answer to Tell me about yourself), strengths (array of 6 short strings matching the must-have skills in the JD), stories (array of exactly 3 objects with string keys title, situation, action, result: project or achievement stories that prove the key requirements, using modest realistic numbers), questions (array of 14 strings: the questions most likely to be asked, mixing behavioural, technical and role-specific ones). Use the background facts when provided and never contradict them. If no background is provided, write plausible illustrative stories. No markdown, no commentary.'+NL+NL+roleBlockBase();
+    const prompt='You are building the single fixed story a candidate will tell in every interview answer for the job below. Work only from the resume. Return only a JSON object with these keys: pitch (4 to 5 confident first-person sentences answering Tell me about yourself, tuned to this JD), facts (array of 10 to 16 short fixed fact lines the candidate will always repeat exactly: roles with company names and dates, total years of experience, team sizes, main projects with their stack and measurable results, all taken from the resume), stories (array of 3 to 4 objects with string keys title, situation, action, result: the strongest resume projects told so they prove the JD requirements, keeping every number from the resume), skillMap (array of objects with string keys skill and evidence: for every skill or tool in the JD that the resume supports, the resume project where it was used and how), bridges (array of objects with string keys skill and answer: for each JD skill the resume does not show, a confident first-person answer that connects it to the closest real work on the resume and how the candidate applies that knowledge, with no hedging words and without claiming the tool was used where the resume does not say so), strengths (array of 6 short strings), weakness (one genuine but safe weakness and what the candidate does about it), whyRole (2 to 3 sentences), questions (array of 14 questions most likely to be asked). Never contradict the resume. No markdown, no commentary.'+NL+NL+roleBlockBase();
     try{
       const r=await run(prompt,()=>{});const s=r.text||'';
       const p=JSON.parse(s.slice(s.indexOf('{'),s.lastIndexOf('}')+1));
       p.illustrative=!bg.value.trim();profile=p;store.set('pc-profile',JSON.stringify(p));renderProfile();
-      $('profNote').textContent='Profile ready. Every answer now follows it.';
+      $('profNote').textContent='Story ready. Check the fixed facts below, then every answer sticks to them.';
     }catch(e){$('profNote').textContent=e instanceof SyntaxError?'Could not read the result. Try again.':errText(e)}
     btn.disabled=false;
   };
@@ -874,6 +886,21 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   addEventListener('visibilitychange',()=>{if(document.hidden)dflush()});
   setTimeout(()=>{dlog('boot',{dictation:!!dict,sample:!!sample,db:!!db,view:(location.hash||'#home')});dflush()},4000);
 
+  /* ---------- the fixed candidate story ---------- */
+  function storyText(full){
+    if(!profile)return '';
+    const P=profile,J=(a,f)=>(a||[]).map(f).join(' | ');
+    let s=NL+NL+'THE CANDIDATE STORY (fixed: every answer must match it exactly and never contradict it):'+NL+'Pitch: '+(P.pitch||'');
+    if(P.facts&&P.facts.length)s+=NL+'Facts: '+P.facts.join(' | ');
+    if(P.skillMap&&P.skillMap.length)s+=NL+'Skill evidence: '+J(P.skillMap,x=>x.skill+': '+x.evidence);
+    if(P.bridges&&P.bridges.length)s+=NL+'Bridges for skills not on the resume: '+J(P.bridges,x=>x.skill+': '+x.answer);
+    if(P.stories&&P.stories.length)s+=NL+'Stories: '+J(P.stories,x=>full?x.title+': '+x.situation+' '+x.action+' Result: '+x.result:x.title+': '+x.result);
+    if(P.strengths&&P.strengths.length)s+=NL+'Strengths: '+P.strengths.join('; ');
+    if(P.weakness)s+=NL+'Weakness: '+P.weakness;
+    if(P.whyRole)s+=NL+'Why this role: '+P.whyRole;
+    return s;
+  }
+
   /* ---------- human voice ---------- */
   const HUMAN='Write exactly how a real person talks in an interview, not how an AI writes. Use contractions, everyday words and some short sentences. Start by actually answering, with no filler opener, and never say Great question, Certainly, Absolutely or Sure. Sound like one specific person with opinions: say what you actually did, what went wrong, and what you would do differently. Use a natural spoken touch now and then, such as Honestly, I think, or So basically, but not in every sentence. No bullet points, no bold, no headings, no numbered lists, no em dashes, no semicolons, no neat three-part patterns, and never a closing summary that repeats the answer. Avoid words like leverage, utilize, robust, seamless, delve, crucial, holistic, passionate and synergy. Stay modest with numbers and do not over-polish. Only use a list or a code block when the question truly asks for one.';
   function accentNote(){return $('iAccent').value==='in'?'Speaking style: natural Indian English, the way a polished professional from India speaks in an interview. Simple clear sentences, respectful and warm, using phrasing like I have worked on, so basically, what I did was, in my previous project, and actually naturally and sparingly. Do not exaggerate it, no slang caricature, no phonetic spelling, and keep it fully professional and easy to understand. Contractions are optional.':''}
@@ -882,9 +909,9 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   function liveBlock(){
     const c=$('company').value.trim();
     let s='JOB DESCRIPTION:'+NL+(jd.value.trim().slice(0,1500)||'(none provided)');
-    if(bg.value.trim())s+=NL+NL+'CANDIDATE BACKGROUND:'+NL+bg.value.trim().slice(0,800);
+    if(bg.value.trim()&&!(profile&&profile.facts))s+=NL+NL+'CANDIDATE RESUME:'+NL+bg.value.trim().slice(0,1500);
     if(c)s+=NL+NL+'COMPANY: '+c;
-    if(profile)s+=NL+NL+'PROFILE: '+profile.pitch+' Strengths: '+(profile.strengths||[]).join('; ')+'. Stories: '+(profile.stories||[]).map(x=>x.title+' - '+x.result).join('; ');
+    if(profile)s+=storyText(false);
     return s;
   }
   function humanize(t){
