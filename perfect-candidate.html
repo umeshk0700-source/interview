@@ -601,7 +601,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   /* ---------- exam ---------- */
   let busyE=false;
   const typeNote={auto:'Work out the question type yourself.',mcq:'This is a multiple choice question.',coding:'This is a coding problem.',aptitude:'This is an aptitude, logic or maths problem.',short:'This is a short answer question.',essay:'This is an essay or descriptive question.',case:'This is a case study or design question.'};
-  const depthNote={answer:'Reply with the final answer only. No explanation, no working, no preamble. For multiple choice give just the option letter and its text. For short answers give one or two sentences at most. Keep the ANSWER line, and for a coding problem put only the code after it with no commentary.',brief:'After the final answer give a single-line reason only.',steps:'After the final answer, show step-by-step working. For multiple choice, also say briefly why each other option is wrong.',teach:'After the final answer, show step-by-step working, then explain the underlying concept in a short paragraph and name one related thing that is often asked.'};
+  const depthNote={answer:'Keep the working concise but complete: the reader sees only the final answer, with the working behind a toggle.',brief:'Keep the working to a few lines: the reader sees it under the answer.',steps:'Write full step-by-step working. For multiple choice, also say briefly why each other option is wrong.',teach:'Write full step-by-step working, then explain the underlying concept in a short paragraph and name one related thing that is often asked.'};
   async function askExam(){
     const imgs=picE.blobs();const typed=$('eq').value.trim();
     if((!typed&&!imgs.length)||busyE)return;
@@ -610,22 +610,30 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     const label=(typed.length>140?typed.slice(0,140)+'…':typed)||'Picture question';
     const t=addTurn($('eThread'),label+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):imgs.length>1?' ('+imgs.length+' pictures)':''),'Solution');const out=t.querySelector('.out');let last='';
     const prompt=examPrompt(q,imgs.length);
-    const render=txt=>{
-      const lines=String(txt).split(NL);
-      const multi=lines.filter(l=>/^\s*Q\d+\s*[:.)-]/i.test(l)).length>1;
-      if(multi){
-        let html='',rest=[];
-        lines.forEach(l=>{const m=l.match(/^\s*(Q\d+)\s*[:.)-]\s*(.*)$/i);if(m)html+='<div class="final"><small>'+esc(m[1].toUpperCase())+'</small>'+inl(m[2])+'</div>';else rest.push(l)});
-        out.innerHTML=html+md(rest.join(NL));return;
+    const t0=Date.now();let finalsText='';
+    const render=(txt,done)=>{
+      const lines=String(txt).split(NL);let ai=-1;
+      for(let i=lines.length-1;i>=0;i--){if(/^\s*(ANSWER:|FINAL ANSWERS:)/i.test(lines[i])){ai=i;break}}
+      const finals=[];let work=String(txt);
+      if(ai>=0){
+        const head=lines[ai],tail=lines.slice(ai+1);
+        if(/^\s*ANSWER:/i.test(head))finals.push(['FINAL ANSWER',head.replace(/^\s*ANSWER:\s*/i,'')+(tail.length?NL+tail.join(NL):'')]);
+        else tail.forEach(l=>{const m=l.match(/^\s*(Q\d+)\s*[:.)-]\s*(.*)$/i);if(m)finals.push([m[1].toUpperCase(),m[2]])});
+        work=lines.slice(0,ai).join(NL);
       }
-      const m=txt.match(/^\s*ANSWER:\s*(.*)\n?/i);
-      if(m){out.innerHTML='<div class="final"><small>FINAL ANSWER</small>'+inl(m[1])+'</div>'+md(txt.slice(m[0].length))}
-      else out.innerHTML=md(txt);
+      if(ai<0){const ql=lines.filter(l=>/^\s*Q\d+\s*[:.)-]/i.test(l));if(ql.length>1)ql.forEach(l=>{const m=l.match(/^\s*(Q\d+)\s*[:.)-]\s*(.*)$/i);finals.push([m[1].toUpperCase(),m[2]])})}
+      work=work.replace(/^\s*WORKING:\s*/i,'');
+      finalsText=finals.map(f=>(finals.length>1?f[0]+': ':'')+f[1]).join(NL);
+      const showWork=$('eDepth').value!=='answer';
+      if(!finals.length){out.innerHTML=done?md(String(txt)):'<span class="note">Solving and checking…</span>'+(showWork?md(work):'');return}
+      out.innerHTML=finals.map(f=>'<div class="final"><small>'+esc(f[0])+'</small>'+md(f[1])+'</div>').join('')+
+        (work.trim()?(showWork?md(work):'<details><summary class="note" style="cursor:pointer">Show working</summary>'+md(work)+'</details>'):'');
     };
     try{
-      const r=await run(prompt,txt=>{last=txt;render(txt)},imgs,'complex');
-      last=r.text||last;render(last);wireCopy(t,()=>last);picE.clear();
-    }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
+      const r=await run(prompt,txt=>{last=txt;render(txt,false)},imgs,'complex');
+      last=r.text||last;render(last,true);wireCopy(t,()=>finalsText||last);picE.clear();
+      examRepeat(t,typed,finalsText||last,Date.now()-t0,imgs.length);
+    }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';dflush()}
     busyE=false;$('eAsk').disabled=false;
   }
   $('eAsk').onclick=askExam;
@@ -643,11 +651,32 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       '- Written and theory answers: precise, exam-style, using the correct technical terms.',
       (extra||typeNote[type])+' '+depthNote[$('eDepth').value],
       'FORMAT'+NL+
-      '- One question: the very first line is ANSWER: followed by the final answer. For coding, that line is a one-line summary of the approach and the full code follows in a code block.'+NL+
-      '- Several questions (for example a pasted paper or a photo with many questions): one line per question, in order, each starting Q1:, Q2: and so on, with just that answer, then any working requested, in the same order.'+NL+
-      '- Professional and exact. No greeting, no filler, no apology. If something is ambiguous or unreadable, state the assumption in one short line after the answer.',
+      '- Always work the problem out first, under a line WORKING:, and check it a second independent way before you commit. Only then give the final answer, at the very end.'+NL+
+      '- One question: end with a line ANSWER: followed by the final answer. For coding, that line is a one-line summary of the approach and the complete final code follows it in a code block.'+NL+
+      '- Several questions (for example a pasted paper or a photo with many questions): work each one, then end with a line FINAL ANSWERS: followed by one line per question in order, Q1:, Q2: and so on, each with just that answer.'+NL+
+      '- Professional and exact. No greeting, no filler, no apology. If something is ambiguous or unreadable, state the assumption in one short line in the working.',
       'QUESTION:'+NL+q+(nImgs?picNote:'')
     ].join(NL+NL);
+  }
+
+  /* every exam answer is kept, so a repeated question shows earlier answers and flags any change */
+  let examLog=[],examDirty=false;
+  let examHist=[];try{examHist=JSON.parse(store.get('pc-examhist','[]'))}catch(e){}
+  const normA=a=>String(a).toLowerCase().replace(/[^a-z0-9]/g,'');
+  function examRepeat(t,typed,fin,ms,nImgs){
+    const prev=typed?examHist.filter(h=>sameQ(h.q,typed)):[];
+    const changed=prev.filter(h=>normA(h.a)!==normA(fin));
+    if(prev.length){
+      const n=el('div',changed.length?'badge':'note');n.style.marginTop='10px';
+      n.textContent=changed.length
+        ?'You asked this '+prev.length+' time'+(prev.length>1?'s':'')+' before and got a different answer: '+changed.slice(-3).map(h=>h.a.replace(/\s+/g,' ').slice(0,80)).join('  |  ')+'. Check this one with step-by-step working.'
+        :'You asked this '+prev.length+' time'+(prev.length>1?'s':'')+' before. Same answer every time.';
+      t.querySelector('.a').append(n);
+    }
+    if(typed){examHist.push({q:typed.slice(0,500),a:String(fin).slice(0,300),ts:Date.now()});examHist=examHist.slice(-200);store.set('pc-examhist',JSON.stringify(examHist))}
+    dlog('exam',{q:(typed||'(picture)').slice(0,120),a:String(fin).slice(0,120),ms,repeats:prev.length,changed:changed.length});
+    if(examLog.length<150){examLog.push({t:Date.now(),q:(typed||'(picture question)').slice(0,1200),a:String(fin).slice(0,800),ms,qtype:$('eType').value,depth:$('eDepth').value,lang:$('eLang').value,imgs:nImgs,repeats:prev.length,changed:changed.length,earlier:changed.slice(-3).map(h=>h.a.slice(0,200))});examDirty=true}
+    dflush();
   }
 
   /* ---------- candidate profile ---------- */
@@ -950,7 +979,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   }
   function dlogP(t){if(String(t).trim())heardAny=true;const n=Date.now();if(n-lastP<1000)return;lastP=n;dlog('partial',{text:String(t).slice(0,200)})}
   async function dflush(){
-    if(!db||!diag.dirty||diag.writing)return;
+    if(!db||!(diag.dirty||examDirty)||diag.writing)return;
     diag.writing=true;diag.dirty=false;
     const v=id=>{try{const e=$(id);return e.type==='checkbox'?e.checked:e.value}catch(x){return null}};
     const doc={ts:diag.t0,role:roleTitle(),ua:navigator.userAgent.slice(0,160),
@@ -958,6 +987,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       settings:{round:v('iRound'),len:v('iLen'),accent:v('iAccent'),voice:v('iVoice'),autoSend:v('autoSend'),keepOn:v('keepOn'),earlyOn:v('earlyOn')},
       events:diag.ev};
     try{await db.collection('diag').doc(diag.id).set(doc)}catch(e){diag.dirty=true}
+    if(examDirty){examDirty=false;try{await db.collection('examlog').doc(diag.id).set({ts:diag.t0,ua:doc.ua,events:examLog})}catch(e){examDirty=true}}
     diag.writing=false;
   }
   setInterval(dflush,10000);
