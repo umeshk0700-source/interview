@@ -298,6 +298,16 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
           <option value="short">Short answer</option>
           <option value="essay">Essay / descriptive</option>
           <option value="case">Case study / design</option>
+          <option value="reasoning">Reasoning / puzzle</option>
+          <option value="verbal">Verbal / English</option>
+          <option value="theory">Technical theory</option>
+          <option value="tf">True or false / fill in the blank</option>
+        </select>
+      </label>
+      <label class="f">Code language
+        <select id="eLang">
+          <option value="">Same as the question, or Python</option>
+          <option>Python</option><option>Java</option><option>C++</option><option>C</option><option>JavaScript</option><option>SQL</option><option>C#</option><option>Go</option>
         </select>
       </label>
       <label class="f">Detail
@@ -599,19 +609,47 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     busyE=true;$('eAsk').disabled=true;$('eEmpty').hidden=true;
     const label=(typed.length>140?typed.slice(0,140)+'…':typed)||'Picture question';
     const t=addTurn($('eThread'),label+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):imgs.length>1?' ('+imgs.length+' pictures)':''),'Solution');const out=t.querySelector('.out');let last='';
-    const prompt='You are an expert tutor helping a candidate practise for an exam connected to the role below. Solve the question correctly and carefully; check your work before answering. '+typeNote[$('eType').value]+' '+depthNote[$('eDepth').value]+'\n\nFormat: the very first line must be exactly "ANSWER: " followed by the final answer (for multiple choice the option letter and its text; for coding a one-line summary of the approach, with the full code after). Then the explanation. If the question is ambiguous or missing information, say what you assumed.\n\n'+examContext()+'\n\nQUESTION:\n'+q+(imgs.length?picNote:'');
+    const prompt=examPrompt(q,imgs.length);
     const render=txt=>{
+      const lines=String(txt).split(NL);
+      const multi=lines.filter(l=>/^\s*Q\d+\s*[:.)-]/i.test(l)).length>1;
+      if(multi){
+        let html='',rest=[];
+        lines.forEach(l=>{const m=l.match(/^\s*(Q\d+)\s*[:.)-]\s*(.*)$/i);if(m)html+='<div class="final"><small>'+esc(m[1].toUpperCase())+'</small>'+inl(m[2])+'</div>';else rest.push(l)});
+        out.innerHTML=html+md(rest.join(NL));return;
+      }
       const m=txt.match(/^\s*ANSWER:\s*(.*)\n?/i);
       if(m){out.innerHTML='<div class="final"><small>FINAL ANSWER</small>'+inl(m[1])+'</div>'+md(txt.slice(m[0].length))}
       else out.innerHTML=md(txt);
     };
     try{
-      const r=await run(prompt,txt=>{last=txt;render(txt)},imgs);
+      const r=await run(prompt,txt=>{last=txt;render(txt)},imgs,'complex');
       last=r.text||last;render(last);wireCopy(t,()=>last);picE.clear();
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>'}
     busyE=false;$('eAsk').disabled=false;
   }
   $('eAsk').onclick=askExam;
+  function examPrompt(q,nImgs){
+    const type=$('eType').value,lang=$('eLang').value;
+    const extra={reasoning:'This is a reasoning or puzzle question.',verbal:'This is a verbal or English language question.',theory:'This is a technical theory question.',tf:'This is a true or false or fill in the blank question.'}[type];
+    return [
+      'You are an expert examiner and solver for every kind of written exam: aptitude, quantitative maths, logical reasoning, verbal ability, programming, data structures and algorithms, SQL, computer science theory, domain and technical questions, and case studies. The goal is the correct answer that scores full marks. The question may have nothing to do with any job; judge it only on its own content.',
+      'HOW TO SOLVE'+NL+
+      '- Read every word of the question and every option. Note units, negatives such as NOT or EXCEPT, and the exact thing asked.'+NL+
+      '- Work it out carefully, then check the result a second, independent way: substitute back, recompute, test each option, or trace the code on a sample and an edge case. If the two do not agree, find the mistake before answering.'+NL+
+      '- Multiple choice: pick exactly one option unless the question says select all that apply, and give the option letter with its text, exactly as written.'+NL+
+      '- Numeric answers: give the final value with units, simplified, at the precision the question asks for.'+NL+
+      '- Coding: give complete, correct, runnable code with optimal time and space complexity that handles every edge case and matches the required input and output format exactly'+(lang?', written in '+lang:', in the language the question uses, otherwise Python')+'. SQL must be standard and run as written.'+NL+
+      '- Written and theory answers: precise, exam-style, using the correct technical terms.',
+      (extra||typeNote[type])+' '+depthNote[$('eDepth').value],
+      'FORMAT'+NL+
+      '- One question: the very first line is ANSWER: followed by the final answer. For coding, that line is a one-line summary of the approach and the full code follows in a code block.'+NL+
+      '- Several questions (for example a pasted paper or a photo with many questions): one line per question, in order, each starting Q1:, Q2: and so on, with just that answer, then any working requested, in the same order.'+NL+
+      '- Professional and exact. No greeting, no filler, no apology. If something is ambiguous or unreadable, state the assumption in one short line after the answer.',
+      'QUESTION:'+NL+q+(nImgs?picNote:'')
+    ].join(NL+NL);
+  }
+
   /* ---------- candidate profile ---------- */
   const NL=String.fromCharCode(10);
   let profile=null;try{profile=JSON.parse(store.get('pc-profile','null'))}catch(e){}
@@ -1007,8 +1045,6 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
 
   /* ---------- the fixed candidate story ---------- */
   const STICK='Stick strictly to THE CANDIDATE STORY: the same companies, projects, dates, tools and numbers, never invent new ones and never contradict it.';
-  /* exam questions only need the job context, not the whole story */
-  function examContext(){return 'JOB CONTEXT: '+(jd.value.trim().slice(0,1200)||'(none provided)')}
   function storyText(full){
     if(!profile)return '';
     const P=profile,J=(a,f)=>(a||[]).map(f).join(' | ');
