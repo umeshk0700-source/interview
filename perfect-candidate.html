@@ -326,6 +326,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     <div class="thumbs" id="eThumbs"></div>
     <div class="row"><button class="btn primary" id="eAsk">Solve</button><button class="btn" id="eClear">Clear</button><span class="note">You can also dictate:</span><button class="btn small" id="eMic" hidden>Dictate</button></div>
     <div class="thread" id="eThread"><div class="empty" id="eEmpty">Your worked answer appears here.</div></div>
+    <div class="row" style="justify-content:center;padding-top:8px"><button class="btn primary" id="examDone">Finish exam and show report</button></div>
+    <div id="examReport"></div>
   </section>
 
   <p class="note" id="foot">Built for practice and preparation. Check answers against the real material before relying on them.</p>
@@ -678,6 +680,23 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     if(examLog.length<150){examLog.push({t:Date.now(),q:(typed||'(picture question)').slice(0,1200),a:String(fin).slice(0,800),ms,qtype:$('eType').value,depth:$('eDepth').value,lang:$('eLang').value,imgs:nImgs,repeats:prev.length,changed:changed.length,earlier:changed.slice(-3).map(h=>h.a.slice(0,200))});examDirty=true}
     dflush();
   }
+
+  /* end-of-exam report from this visit's log */
+  $('examDone').onclick=()=>{
+    const L=examLog,box=$('examReport');box.innerHTML='';const card=el('div','a');card.style.display='grid';card.style.gap='8px';
+    if(!L.length){card.append(el('p',null,'No exam questions have been answered since this page was opened.'));box.append(card);return}
+    const rep=L.filter(x=>x.repeats>0),chg=L.filter(x=>x.changed>0),ms=L.map(x=>x.ms).sort((a,b)=>a-b);
+    card.append(el('h3',null,'Exam report'));
+    [[L.length,'questions answered'],[rep.length,'repeated questions'],[chg.length,'repeats where the answer changed'],[(ms[Math.floor(ms.length/2)]/1000).toFixed(1)+'s','typical time per answer'],[(ms[ms.length-1]/1000).toFixed(1)+'s','slowest answer'],[L.filter(x=>x.imgs).length,'picture questions']]
+      .forEach(([v,k])=>{const r=el('div','mrow');r.append(el('b',null,String(v)),el('span',null,k));card.append(r)});
+    if(chg.length){
+      card.append(el('h3',null,'Answers that changed'));
+      chg.forEach(x=>{const d=el('div','qa');d.append(el('b',null,x.q.slice(0,240)),el('div',null,'Now: '+x.a.replace(/\s+/g,' ').slice(0,200)),el('div','note','Earlier: '+(x.earlier||[]).map(e=>e.replace(/\s+/g,' ')).join('  |  ')));card.append(d)});
+    }
+    card.append(el('p','note','The full log is saved. Tell Claude "exam done" to have it analysed and fixed.'));
+    box.append(card);dlog('examDone',{n:L.length});dflush();
+    try{box.scrollIntoView({behavior:'smooth',block:'start'})}catch(e){}
+  };
 
   /* ---------- candidate profile ---------- */
   const NL=String.fromCharCode(10);
