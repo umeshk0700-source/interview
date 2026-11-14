@@ -324,7 +324,8 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     </label>
     <div class="row"><label class="btn small" for="eFile">Attach picture</label><input type="file" id="eFile" accept="image/*" multiple hidden><span class="note">Screenshots, photos of paper, diagrams and code all work. You can also paste or drop an image into the box.</span></div>
     <div class="thumbs" id="eThumbs"></div>
-    <div class="row"><button class="btn primary" id="eAsk">Solve</button><button class="btn" id="eClear">Clear</button><span class="note">You can also dictate:</span><button class="btn small" id="eMic" hidden>Dictate</button></div>
+    <div class="row"><button class="btn primary" id="eAsk">Solve</button><button class="btn" id="eClear">New question</button><span class="note">You can also dictate:</span><button class="btn small" id="eMic" hidden>Dictate</button></div>
+    <div class="note" id="eThreadNote"></div>
     <div class="thread" id="eThread"><div class="empty" id="eEmpty">Your worked answer appears here.</div></div>
     <div class="row" style="justify-content:center;padding-top:8px"><button class="btn primary" id="examDone">Finish exam and show report</button></div>
     <div id="examReport"></div>
@@ -611,20 +612,24 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     busyE=true;$('eAsk').disabled=true;$('eEmpty').hidden=true;
     const label=(typed.length>140?typed.slice(0,140)+'…':typed)||'Picture question';
     const t=addTurn($('eThread'),label+(imgs.length&&typed?' + '+imgs.length+' picture'+(imgs.length>1?'s':''):imgs.length>1?' ('+imgs.length+' pictures)':''),'Solution');const out=t.querySelector('.out');let last='';
-    const prompt=examPrompt(q,imgs.length);
+    const prompt=examPrompt(q,imgs.length,threadText());let problemText='';
     const t0=Date.now();let finalsText='';
     const render=(txt,done)=>{
-      const lines=String(txt).split(NL);let ai=-1;
-      for(let i=lines.length-1;i>=0;i--){if(/^\s*(ANSWER:|FINAL ANSWERS:)/i.test(lines[i])){ai=i;break}}
-      const finals=[];let work=String(txt);
+      const lines=String(txt).split(NL);let ai=-1,ak='';
+      for(let i=lines.length-1;i>=0;i--){const L=labelOf(lines[i]);if(L&&(L.k==='ANSWER'||L.k==='FINAL ANSWERS')){ai=i;ak=L.k;break}}
+      const qline=l=>String(l).match(/^\s*[*_]*(Q\d+)[*_]*\s*[:.)-]\s*(.*)$/i);
+      const finals=[];let workLines=lines;
       if(ai>=0){
-        const head=lines[ai],tail=lines.slice(ai+1);
-        if(/^\s*ANSWER:/i.test(head))finals.push(['FINAL ANSWER',head.replace(/^\s*ANSWER:\s*/i,'')+(tail.length?NL+tail.join(NL):'')]);
-        else tail.forEach(l=>{const m=l.match(/^\s*(Q\d+)\s*[:.)-]\s*(.*)$/i);if(m)finals.push([m[1].toUpperCase(),m[2]])});
-        work=lines.slice(0,ai).join(NL);
-      }
-      if(ai<0){const ql=lines.filter(l=>/^\s*Q\d+\s*[:.)-]/i.test(l));if(ql.length>1)ql.forEach(l=>{const m=l.match(/^\s*(Q\d+)\s*[:.)-]\s*(.*)$/i);finals.push([m[1].toUpperCase(),m[2]])})}
-      work=work.replace(/^\s*WORKING:\s*/i,'');
+        const tail=lines.slice(ai+1);
+        if(ak==='ANSWER'){const r=labelOf(lines[ai]).rest;finals.push(['FINAL ANSWER',r+(tail.length?NL+tail.join(NL):'')])}
+        else tail.forEach(l=>{const m=qline(l);if(m)finals.push([m[1].toUpperCase(),m[2]])});
+        workLines=lines.slice(0,ai);
+      }else{const ql=lines.filter(l=>qline(l));if(ql.length>1)ql.forEach(l=>{const m=qline(l);finals.push([m[1].toUpperCase(),m[2]])})}
+      /* keep the transcription of the problem for follow-ups, and turn labels into plain headings */
+      let inP=false;const prob=[];
+      workLines=workLines.map(l=>{const L=labelOf(l);if(L){inP=L.k==='PROBLEM';if(inP&&L.rest)prob.push(L.rest);return '**'+L.k.charAt(0)+L.k.slice(1).toLowerCase()+'**'+(L.rest?NL+L.rest:'')}if(inP)prob.push(l);return l});
+      problemText=prob.join(NL).trim();
+      const work=workLines.join(NL);
       finalsText=finals.map(f=>(finals.length>1?f[0]+': ':'')+f[1]).join(NL);
       const showWork=$('eDepth').value!=='answer';
       if(!finals.length){out.innerHTML=done?md(String(txt)):'<span class="note">Solving and checking…</span>'+(showWork?md(work):'');return}
@@ -634,12 +639,14 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
     try{
       const r=await run(prompt,txt=>{last=txt;render(txt,false)},imgs,'complex');
       last=r.text||last;render(last,true);wireCopy(t,()=>finalsText||last);picE.clear();
-      examRepeat(t,typed,finalsText||last,Date.now()-t0,imgs.length);
+      examRepeat(t,typed,finalsText||last,Date.now()-t0,imgs.length,imgs.map(x=>x.size).join(','));
+      examThread.push({q:(typed||'(pictures)').slice(0,600),problem:problemText.slice(0,4000),answer:String(finalsText||last).slice(0,2000)});examThread=examThread.slice(-5);
+      $('eThreadNote').textContent='Follow-ups continue this question ('+examThread.length+' so far). Press New question to start fresh.';
     }catch(e){out.innerHTML='<span class="err">'+esc(errText(e))+'</span>';dflush()}
     busyE=false;$('eAsk').disabled=false;
   }
   $('eAsk').onclick=askExam;
-  function examPrompt(q,nImgs){
+  function examPrompt(q,nImgs,ctx){
     const type=$('eType').value,lang=$('eLang').value;
     const extra={reasoning:'This is a reasoning or puzzle question.',verbal:'This is a verbal or English language question.',theory:'This is a technical theory question.',tf:'This is a true or false or fill in the blank question.'}[type];
     return [
@@ -650,23 +657,36 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
       '- Multiple choice: pick exactly one option unless the question says select all that apply, and give the option letter with its text, exactly as written.'+NL+
       '- Numeric answers: give the final value with units, simplified, at the precision the question asks for.'+NL+
       '- Coding: give complete, correct, runnable code with optimal time and space complexity that handles every edge case and matches the required input and output format exactly'+(lang?', written in '+lang:', in the language the question uses, otherwise Python')+'. SQL must be standard and run as written.'+NL+
-      '- Written and theory answers: precise, exam-style, using the correct technical terms.',
+      '- Written and theory answers: precise, exam-style, using the correct technical terms.'+NL+
+      '- If the person shows their own code or attempt and asks for a fix, change as little as possible: keep their names, structure and output, and give the corrected code with each changed line marked by a short comment.'+NL+
+      '- Platform coding tests (HackerRank, LeetCode, Codility and similar): never change the locked driver or main code, implement only the parts that are asked for, and match every expected output string exactly, including spaces and punctuation.'+NL+
+      '- If only part of the problem is visible, use EARLIER IN THIS EXAM to fill the gaps and still give a complete answer. Never ask for more information and never say no question was given: a short message such as easy solution, minimal changes or what should I change is a follow-up to the previous question.'+NL+
+      '- Stay consistent with earlier answers in this exam unless they were wrong; if you change the approach, say why in one line of the working.',
       (extra||typeNote[type])+' '+depthNote[$('eDepth').value],
       'FORMAT'+NL+
+      '- When the question is in pictures, begin with a line PROBLEM: followed by an exact transcription of everything relevant that is visible: the problem statement, the code with its line numbers, and any error or test output.'+NL+
       '- Always work the problem out first, under a line WORKING:, and check it a second independent way before you commit. Only then give the final answer, at the very end.'+NL+
       '- One question: end with a line ANSWER: followed by the final answer. For coding, that line is a one-line summary of the approach and the complete final code follows it in a code block.'+NL+
       '- Several questions (for example a pasted paper or a photo with many questions): work each one, then end with a line FINAL ANSWERS: followed by one line per question in order, Q1:, Q2: and so on, each with just that answer.'+NL+
+      '- Write the labels PROBLEM:, WORKING:, ANSWER: and FINAL ANSWERS: as plain text at the start of their own lines, never in bold or as headings.'+NL+
       '- Professional and exact. No greeting, no filler, no apology. If something is ambiguous or unreadable, state the assumption in one short line in the working.',
+      ctx?'EARLIER IN THIS EXAM (the problem being worked on; use it whenever the new message continues it, and ignore it only if the new message is clearly a different question):'+NL+ctx:'',
       'QUESTION:'+NL+q+(nImgs?picNote:'')
-    ].join(NL+NL);
+    ].filter(Boolean).join(NL+NL);
   }
+  /* the current exam problem: follow-ups and later screenshots are answered with this context */
+  let examThread=[];
+  function threadText(){return examThread.slice(-3).map(h=>'Message: '+h.q+(h.problem?NL+'Transcribed problem: '+h.problem:'')+NL+'Answer given: '+h.answer).join(NL+NL)}
+  function labelOf(l){const m=String(l).match(/^\s*[#>*_ ]*(PROBLEM|WORKING|ANSWER|FINAL ANSWERS)\s*[*_]*\s*[:\-]\s*[*_]*\s*(.*)$/i);return m?{k:m[1].toUpperCase(),rest:m[2]}:null}
 
   /* every exam answer is kept, so a repeated question shows earlier answers and flags any change */
   let examLog=[],examDirty=false;
   let examHist=[];try{examHist=JSON.parse(store.get('pc-examhist','[]'))}catch(e){}
   const normA=a=>String(a).toLowerCase().replace(/[^a-z0-9]/g,'');
-  function examRepeat(t,typed,fin,ms,nImgs){
-    const prev=typed?examHist.filter(h=>sameQ(h.q,typed)):[];
+  function examRepeat(t,typed,fin,ms,nImgs,sig){
+    sig=sig||'';
+    const comparable=sig||words(typed).length>=4;
+    const prev=comparable?examHist.filter(h=>(h.sig||'')===sig&&(typed?sameQ(h.q,typed):!h.q)):[];
     const changed=prev.filter(h=>normA(h.a)!==normA(fin));
     if(prev.length){
       const n=el('div',changed.length?'badge':'note');n.style.marginTop='10px';
@@ -675,7 +695,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
         :'You asked this '+prev.length+' time'+(prev.length>1?'s':'')+' before. Same answer every time.';
       t.querySelector('.a').append(n);
     }
-    if(typed){examHist.push({q:typed.slice(0,500),a:String(fin).slice(0,300),ts:Date.now()});examHist=examHist.slice(-200);store.set('pc-examhist',JSON.stringify(examHist))}
+    if(typed||sig){examHist.push({q:typed.slice(0,500),sig,a:String(fin).slice(0,300),ts:Date.now()});examHist=examHist.slice(-200);store.set('pc-examhist',JSON.stringify(examHist))}
     dlog('exam',{q:(typed||'(picture)').slice(0,120),a:String(fin).slice(0,120),ms,repeats:prev.length,changed:changed.length});
     if(examLog.length<150){examLog.push({t:Date.now(),q:(typed||'(picture question)').slice(0,1200),a:String(fin).slice(0,800),ms,qtype:$('eType').value,depth:$('eDepth').value,lang:$('eLang').value,imgs:nImgs,repeats:prev.length,changed:changed.length,earlier:changed.slice(-3).map(h=>h.a.slice(0,200))});examDirty=true}
     dflush();
@@ -1342,7 +1362,7 @@ textarea.drop{border-color:var(--accent);background:var(--accent-soft)}
   function applySize(){iThread.classList.toggle('big',big);$('sizeBtn').textContent=big?'Smaller text':'Larger text'}
   $('sizeBtn').onclick=()=>{big=!big;store.set('pc-big',big?'1':'0');applySize()};applySize();
 
-  $('eClear').onclick=()=>{$('eq').value='';picE.clear();$('eq').focus()};
+  $('eClear').onclick=()=>{$('eq').value='';picE.clear();examThread=[];$('eThreadNote').textContent='Starting a new question.';$('eq').focus()};
   $('eq').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();askExam()}});
 })();
 </script>
