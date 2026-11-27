@@ -284,12 +284,12 @@ li:first-child .item { border-top: 0; }
       lists.appendChild(s);
     });
 
-    /* buy this now: a product that starts within the next 4 days */
+    /* buy this now: a product that starts within the next 7 days */
     if (inf) {
       var seen = {}, buys = ITEMS.filter(function (i) {
         if (!i.start || !i.why || seen[i.p]) return false;
         var left = i.start - (inf.d + 1);
-        if (left >= 1 && left <= 4) { seen[i.p] = true; i.left = left; return true; }
+        if (left >= 1 && left <= 7) { seen[i.p] = true; i.left = left; return true; }
         return false;
       });
       if (buys.length) {
