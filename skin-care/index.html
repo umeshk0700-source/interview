@@ -1,0 +1,370 @@
+<title>Daily Skin Routine</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700&family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* layout: one-column "today" list, ordered by time of day, progress on top, upcoming below */
+  --bg: #f3f8f7;
+  --surface: #ffffff;
+  --ink: #12312f;
+  --muted: #5a7371;
+  --accent: #0f766e;
+  --line: #d6e4e2;
+  --soft: #e4f1ef;
+  --warn: #9a5b00;
+  --warn-soft: #fbefd9;
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", sans-serif;
+  --font-body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1b1a; --surface: #142524; --ink: #e3f1ef; --muted: #8fb0ac;
+    --accent: #4fd1c5; --line: #244140; --soft: #1b3331;
+    --warn: #f2c26b; --warn-soft: #33290f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1b1a; --surface: #142524; --ink: #e3f1ef; --muted: #8fb0ac;
+  --accent: #4fd1c5; --line: #244140; --soft: #1b3331;
+  --warn: #f2c26b; --warn-soft: #33290f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 48px;
+}
+main { max-width: 640px; margin: 0 auto; }
+header { padding-block: 28px 4px; }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin: 0; }
+h1 { font-family: var(--font-display); font-size: 30px; line-height: 1.1; margin: 4px 0 6px; text-wrap: balance; }
+.phase { color: var(--muted); font-size: 15px; margin: 0; }
+.progress { margin: 18px 0 6px; background: var(--soft); border-radius: 999px; height: 10px; overflow: hidden; }
+.progress > div { height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .25s ease; }
+.progress-row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.days { display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+.days .lbl { font-size: 13px; color: var(--muted); margin-right: 4px; }
+.dot { width: 22px; height: 22px; border-radius: 6px; background: var(--soft); border: 1px solid var(--line); font-size: 10px; display: grid; place-items: center; color: var(--muted); }
+.dot.today { outline: 2px solid var(--accent); outline-offset: 1px; }
+.new { margin-top: 18px; background: var(--warn-soft); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 500; }
+.new:empty { display: none; }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px 16px 8px; margin-top: 18px; }
+section h2 { font-family: var(--font-display); font-size: 18px; margin: 0 0 4px; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+section h2 small { font-family: var(--font-body); font-size: 13px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+section .sub { color: var(--muted); font-size: 14px; margin: 0 0 6px; }
+ul { list-style: none; margin: 0; padding: 0; }
+.item { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--line); cursor: pointer; }
+li:first-child .item { border-top: 0; }
+.item input { appearance: none; -webkit-appearance: none; flex: none; width: 26px; height: 26px; margin: 1px 0 0; border: 2px solid var(--muted); border-radius: 8px; background: var(--surface); display: grid; place-items: center; cursor: pointer; }
+.item input:checked { background: var(--accent); border-color: var(--accent); }
+.item input:checked::after { content: ""; width: 6px; height: 12px; border: solid var(--bg); border-width: 0 3px 3px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.item input:focus-visible, button:focus-visible, input[type=date]:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.item .t { font-weight: 600; display: block; }
+.item .p { display: inline-block; margin: 3px 0 2px; font-size: 14px; font-weight: 600; color: var(--accent); background: var(--soft); border-radius: 6px; padding: 1px 8px; }
+.item .n { color: var(--muted); font-size: 14px; display: block; }
+.item input:checked + span .t { text-decoration: line-through; color: var(--muted); }
+.tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 8px; margin-left: 6px; border-radius: 999px; background: var(--soft); color: var(--accent); vertical-align: 1px; }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.upcoming li, .rules li { padding: 6px 0; font-size: 15px; display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); }
+.upcoming li:first-child, .rules li:first-child { border-top: 0; }
+.upcoming .when { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.upcoming, .rules { padding-bottom: 12px; }
+.ask { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 8px; font-weight: 600; font-size: 15px; }
+.ask span { margin-right: 4px; }
+.ask button { font: inherit; font-size: 14px; font-weight: 600; min-height: 38px; padding: 6px 16px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.ask button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.note { border-color: var(--accent); }
+.note p:last-child { margin: 0 0 10px; }
+.buy { border-color: var(--warn); }
+.buy .item { cursor: default; }
+.done-all { text-align: center; padding: 18px 0 10px; color: var(--accent); font-weight: 600; }
+.foot { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; font-size: 14px; color: var(--muted); }
+.foot label { display: flex; gap: 8px; align-items: center; }
+.foot input[type=date] { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+.reset { font: inherit; font-size: 14px; padding: 8px 14px; min-height: 38px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .progress > div { transition: none; } }
+</style>
+
+<main>
+  <header>
+    <h1 id="today">Today</h1>
+  </header>
+
+  <!-- DAILY-NOTE-START -->
+  <section class="note" id="note">
+    <h2>Today's plan</h2>
+    <p>Day 1. Keep your full face routine as it is. For your body, stay with your usual soap for now. Take your starting photos today.</p>
+  </section>
+  <!-- DAILY-NOTE-END -->
+
+  <div id="lists"></div>
+
+
+
+</main>
+
+<script>
+(function () {
+  var DAY = 86400000;
+  var DEFAULT_START = "2026-11-27";
+
+  /* when(dayIndex, week, weekday) -> true if the step is due that day */
+  /* Face: the user's full routine from day 1. Body: one new product at a time; start = day it begins, why = shown when it is time to buy it. */
+  var ITEMS = [
+    {id:"s1", s:"bath", hair:true, t:"Shampoo and condition", p:"Your usual shampoo and conditioner", n:"Do this first. Massage shampoo into your scalp for 30 seconds and rinse. Conditioner on the ends for 1 to 2 minutes, rinse. Lean forward so it runs off your back."},
+    {id:"s2", s:"bath", t:"Wash face", p:"La Roche-Posay Toleriane Foaming Cleanser", n:"One pump, massage for 30 to 60 seconds, rinse with lukewarm water. Keep the body soap off your face."},
+    {id:"s3", s:"bath", t:"Wash body", p:"Your usual soap", n:"Everywhere except your face. Rinse your back last, then pat dry."},
+    {id:"s4", s:"bath", t:"SA wash on back, neck, bumpy areas", p:"Neutrogena Body Clear or CeraVe SA Body Wash", n:"After the soap. Spread a thin layer, leave it on for 1 to 2 minutes, then rinse.", start:22, why:"Clears bumps and breakouts on your back and neck.", when:saDue},
+
+    {id:"m2", s:"after", t:"Moisturize face", p:"CeraVe PM Facial Moisturizing Lotion", n:"A pea-sized amount on a dry face."},
+    {id:"m3", s:"after", t:"Sunscreen on face and neck", p:"SKIN1004 Hyalu-Cica Water-Fit Sun Serum", n:"Always last. Two finger-lengths, 15 minutes before going out."},
+    {id:"s8", s:"after", t:"Body lotion", p:"CeraVe Daily Moisturizing Lotion", n:"All over the body, within 3 minutes of getting out, while skin is still a little damp.", start:8, why:"Keeps your body skin soft and stops soap from drying it out."},
+    {id:"s7", s:"after", t:"Neck, underarms, bumpy areas", p:"AmLactin Daily Moisturizing Lotion (12% lactic acid)", n:"A thin layer on still-damp skin. Wash your hands after. Skip on shaved or irritated skin.", start:36, why:"Smooths rough, bumpy and dark skin on your neck and underarms.", when:function (d) { return d >= 42 || !doneOn(d - 1, "s7"); }},
+
+    {id:"n1", s:"night", t:"Wash face", p:"La Roche-Posay Toleriane Foaming Cleanser", n:"Same as the morning. Removes sunscreen and the day's oil."},
+    {id:"n2", s:"night", t:"Serum", p:"Anua Niacinamide 10% + TXA 4% Serum", n:"On a fully dry face, 2 or 3 drops. Let it soak in for a minute."},
+    {id:"n3", s:"night", t:"Moisturize face", p:"CeraVe PM Facial Moisturizing Lotion", n:"A pea-sized amount, after the serum."},
+    {id:"n4", s:"night", t:"Antiperspirant on underarms", p:"Degree Men Clinical Protection", n:"On clean, fully dry underarms, 2 or 3 swipes. Your morning bath washes it off.", start:50, why:"Cuts underarm sweat and smell.", when:function (d) { return d % 2 === 1; }}
+  ];
+  /* DAILY-PLAN-START */
+  var PLAN = {date: "2026-11-27", sa: false, skip: []};
+  /* DAILY-PLAN-END */
+  /* SA wash from day 22, 3 or 4 days a week, never two days in a row. The daily plan decides; this is the fallback. */
+  function saDue(d, w) {
+    if (PLAN.date === dayKey(d) && typeof PLAN.sa === "boolean") return PLAN.sa;
+    return d % 2 === 1;
+  }
+  function dayKey(d) { var b = parse(start); return dkey(new Date(b.getFullYear(), b.getMonth(), b.getDate() + d)); }
+  function doneOn(d, id) { var k = dayKey(d); return !!(checks[k] && checks[k][id]); }
+
+  var ONCE = [
+    {id:"o1", t:"Book a doctor visit", n:"A general checkup with your doctor", due:0},
+    {id:"o2", t:"Take starting photos", n:"Bare face, daylight, same angle each time", due:0},
+    {id:"o3", t:"4-week photo check", n:"Same light and angle as the starting photos", due:27},
+    {id:"o4", t:"8-week photo check", n:"Compare with the starting and 4-week photos", due:55}
+  ];
+  var SECTIONS = [
+    {s:"bath", h:"Morning bath", ask:true},
+    {s:"after", h:"After the bath"},
+    {s:"night", h:"Night"},
+    {s:"once", h:"Also today"}
+  ];
+  var PHASE = {
+    1: "Week 1: gentle basics only.",
+    2: "Week 2: SA wash and AmLactin start.",
+    3: "Week 3: antiperspirant starts at night.",
+    4: "Full routine."
+  };
+
+  function get(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  function put(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  function dkey(d) {
+    var m = d.getMonth() + 1, day = d.getDate();
+    return d.getFullYear() + "-" + (m < 10 ? "0" : "") + m + "-" + (day < 10 ? "0" : "") + day;
+  }
+  function parse(k) { var p = k.split("-"); return new Date(+p[0], +p[1] - 1, +p[2]); }
+  function diff(a, b) { return Math.round((a - b) / DAY); }
+  function fmt(d, o) { return d.toLocaleDateString(undefined, o); }
+
+  var now = new Date();
+  var todayD = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var today = dkey(todayD);
+  var start = DEFAULT_START;
+  var checks = get("sr-checks", {});
+  var once = get("sr-once", {});
+  var hist = get("sr-hist", {});
+  var hairDays = get("sr-hair", {});
+  if (!checks[today]) checks[today] = {};
+
+  function info(date) {
+    var d = diff(date, parse(start));
+    if (d < 0) return null;
+    return {d: d, w: Math.min(5, Math.floor(d / 7) + 1), wd: d % 7};
+  }
+  function due(item, inf, ignoreShower) {
+    if (item.hair && !ignoreShower && hairDays[today] !== true) return false;
+    if (!ignoreShower && PLAN.date === today && PLAN.skip && PLAN.skip.indexOf(item.id) >= 0) return false;
+    if (!inf) return !item.start && !item.when;
+    if (item.start && inf.d + 1 < item.start) return false;
+    return item.when ? item.when(inf.d, inf.w, inf.wd) : true;
+  }
+  function nextDue(item, inf) {
+    for (var k = 1; k <= 21; k++) {
+      var dt = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate() + k);
+      if (due(item, info(dt), true)) return {k: k, dt: dt};
+    }
+    return null;
+  }
+  function onceDue(o, inf) {
+    var dn = once[o.id];
+    if (dn === true) return false;            /* done before this version */
+    if (dn && dn !== today) return false;     /* done on an earlier day */
+    return inf ? inf.d >= o.due : o.due === 0;
+  }
+
+  function row(item, checked, onChange) {
+    var li = document.createElement("li");
+    var label = document.createElement("label");
+    label.className = "item";
+    var input = document.createElement("input");
+    input.type = "checkbox"; input.id = "c-" + item.id; input.checked = !!checked;
+    input.addEventListener("change", function () { onChange(input.checked); });
+    var span = document.createElement("span");
+    var t = document.createElement("span"); t.className = "t"; t.textContent = item.t;
+    if (item.tagText) { var tg = document.createElement("span"); tg.className = "tag" + (item.tagWarn ? " warn" : ""); tg.textContent = item.tagText; t.appendChild(tg); }
+    span.appendChild(t);
+    if (item.p) { var pr = document.createElement("span"); pr.className = "p"; pr.textContent = item.p; span.appendChild(pr); }
+    var n = document.createElement("span"); n.className = "n"; n.textContent = item.n;
+    span.appendChild(n);
+    label.appendChild(input); label.appendChild(span);
+    li.appendChild(label);
+    return li;
+  }
+
+  var todays = [];
+  function render() {
+    var inf = info(todayD);
+    document.getElementById("today").textContent = fmt(todayD, {weekday: "long", month: "long", day: "numeric"});
+
+    todays = [];
+    var lists = document.getElementById("lists");
+    lists.innerHTML = "";
+    SECTIONS.forEach(function (sec) {
+      var items = [];
+      if (sec.s === "once") {
+        ONCE.forEach(function (o) {
+          if (!onceDue(o, inf)) return;
+          var late = inf ? inf.d - o.due : 0;
+          items.push({id: o.id, t: o.t, n: o.n, once: true, tagText: ""});
+        });
+      } else {
+        ITEMS.forEach(function (i) {
+          if (i.s !== sec.s || !due(i, inf)) return;
+          items.push({id: i.id, t: i.t, p: i.p, n: i.n, tagText: i.tag || ""});
+        });
+      }
+      if (!items.length && !sec.ask) return;
+      var s = document.createElement("section");
+      var h = document.createElement("h2"); h.textContent = sec.h;
+      s.appendChild(h);
+      if (sec.ask) {
+        var q = document.createElement("div"); q.className = "ask";
+        var ql = document.createElement("span"); ql.textContent = "Washing your hair today?"; q.appendChild(ql);
+        [["Yes", true], ["No", false]].forEach(function (o) {
+          var b = document.createElement("button"); b.type = "button"; b.id = "sh-" + o[0].toLowerCase();
+          b.textContent = o[0]; b.setAttribute("aria-pressed", String(hairDays[today] === o[1]));
+          b.addEventListener("click", function () { hairDays[today] = o[1]; put("sr-hair", hairDays); render(); });
+          q.appendChild(b);
+        });
+        s.appendChild(q);
+        if (hairDays[today] === false) {
+          var m = document.createElement("p"); m.className = "sub";
+          m.textContent = "No hair wash today. Keep your hair out of the water so it does not drip on your back.";
+          s.appendChild(m);
+        }
+      }
+      if (sec.sub) { var p = document.createElement("p"); p.className = "sub"; p.textContent = sec.sub; s.appendChild(p); }
+      var ul = document.createElement("ul");
+      items.forEach(function (it) {
+        todays.push(it);
+        var on = it.once ? once[it.id] === today : checks[today][it.id];
+        ul.appendChild(row(it, on, function (v) {
+          if (it.once) { if (v) once[it.id] = today; else delete once[it.id]; put("sr-once", once); }
+          else { checks[today][it.id] = v; put("sr-checks", checks); }
+          update();
+        }));
+      });
+      if (items.length) s.appendChild(ul);
+      lists.appendChild(s);
+    });
+
+    /* buy this now: a product that starts within the next 4 days */
+    if (inf) {
+      var seen = {}, buys = ITEMS.filter(function (i) {
+        if (!i.start || !i.why || seen[i.p]) return false;
+        var left = i.start - (inf.d + 1);
+        if (left >= 1 && left <= 4) { seen[i.p] = true; i.left = left; return true; }
+        return false;
+      });
+      if (buys.length) {
+        var bs = document.createElement("section"); bs.className = "buy";
+        var bh = document.createElement("h2"); bh.textContent = "Buy this now"; bs.appendChild(bh);
+        var bu = document.createElement("ul");
+        buys.forEach(function (i) {
+          var li = document.createElement("li"); li.className = "item";
+          var sp = document.createElement("span");
+          var pr = document.createElement("span"); pr.className = "p"; pr.textContent = i.p;
+          var n = document.createElement("span"); n.className = "n";
+          var dt = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate() + i.left);
+          n.textContent = i.why + " You start it " + (i.left === 1 ? "tomorrow" : fmt(dt, {weekday: "long", month: "short", day: "numeric"})) + ".";
+          sp.appendChild(pr); sp.appendChild(n); li.appendChild(sp); bu.appendChild(li);
+        });
+        bs.appendChild(bu);
+        lists.insertBefore(bs, lists.firstChild);
+      }
+    }
+
+    /* not today */
+    var up = document.getElementById("up");
+    if (up) {
+    up.innerHTML = "";
+    ITEMS.forEach(function (i) {
+      if (!i.when && !i.from) return;
+      if (due(i, inf)) return;
+      if (i.hair) return;
+      var label;
+      {
+        var nx = nextDue(i, inf);
+        if (!nx) return;
+        label = (nx.k === 1 ? "Tomorrow" : fmt(nx.dt, {weekday: "short", month: "short", day: "numeric"}));
+        if (inf && i.from && inf.w < i.from) label = "Starts " + label;
+      }
+      var li = document.createElement("li");
+      var a = document.createElement("span"); a.textContent = i.t + " (" + i.p + ")";
+      var b = document.createElement("span"); b.className = "when";
+      b.textContent = label;
+      li.appendChild(a); li.appendChild(b); up.appendChild(li);
+    });
+    document.getElementById("s-up").hidden = !up.children.length;
+    }
+    update();
+  }
+
+  function isDone(it) { return it.once ? once[it.id] === today : !!checks[today][it.id]; }
+  function update() {
+    var done = todays.filter(isDone).length, total = todays.length;
+    var pct = total ? Math.round(done / total * 100) : 0;
+    SECTIONS.forEach(function (sec) {
+      if (!sec.el || !sec.items) return;
+      sec.el.textContent = sec.items.filter(isDone).length + " / " + sec.items.length;
+    });
+    hist[today] = pct; put("sr-hist", hist);
+    drawDays();
+  }
+
+  function drawDays() {
+    var box = document.getElementById("days");
+    if (!box) return;
+    box.innerHTML = "";
+    var lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = "Last 7 days"; box.appendChild(lbl);
+    for (var k = 6; k >= 0; k--) {
+      var d = new Date(todayD.getFullYear(), todayD.getMonth(), todayD.getDate() - k);
+      var key = dkey(d), p = hist[key] || 0;
+      var el = document.createElement("div");
+      el.className = "dot" + (k === 0 ? " today" : "");
+      el.textContent = fmt(d, {weekday: "narrow"});
+      el.title = key + ": " + p + "%";
+      if (p > 0) { el.style.background = "var(--accent)"; el.style.opacity = String(0.35 + 0.65 * (p / 100)); el.style.color = "var(--bg)"; el.style.borderColor = "var(--accent)"; }
+      box.appendChild(el);
+    }
+  }
+
+  render();
+})();
+</script>

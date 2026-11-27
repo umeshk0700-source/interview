@@ -11,3 +11,7 @@ A practice and preparation site for interviews and exams. Paste a job descriptio
 The whole app is `perfect-candidate.html`, published as a Claude artifact. It uses the artifact `sample` (ask Claude) and `dictation` (voice) capabilities, so it needs no server or API key. Role details are kept in the browser's local storage.
 
 Use it to practise. Check answers against real material before relying on them.
+
+## Skin care
+
+`skin-care/` holds a separate project: a daily skin care page and its plan. See `skin-care/PLAN.md`.
